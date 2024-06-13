@@ -19,6 +19,8 @@ from django.urls import path, include, reverse_lazy
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.views.generic.base import RedirectView
 from users.api import UserRegisterAPIView, UserLoginAPIView
+from django.conf.urls.static import static
+from django.conf import settings
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,4 +29,4 @@ urlpatterns = [
     # JWT token endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -24,8 +24,7 @@ from django.conf import settings
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/users/register/', UserRegisterAPIView.as_view(), name='user-register'),
-    path('api/users/login/', UserLoginAPIView.as_view(), name='user-login'),
+    path('api/users/', include('users.urls')),
     # JWT token endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

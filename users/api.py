@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model, authenticate
+from django.db.models import Q
+
 from rest_framework import status, views
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -24,10 +26,10 @@ class UserRegisterAPIView(views.APIView):
 
 class UserLoginAPIView(views.APIView):
     def post(self, request):
-        username = request.data.get('username')
+        login = request.data.get('login')
         password = request.data.get('password')
-        user = authenticate(username=username, password=password)
-        if user is not None:
+        user = User.objects.filter(Q(username=login) | Q(phone_number=login)).first()
+        if user and user.check_password(password):
              # Update last_login on successful login
             user.last_login = now()
             user.save(update_fields=['last_login'])

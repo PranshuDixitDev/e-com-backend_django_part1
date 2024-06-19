@@ -8,6 +8,7 @@ class UserAccountTests(APITestCase):
     def setUp(self):
         self.user = CustomUser.objects.create_user(
             username='testuser',
+            email='testuser@gmail.com',
             password='password123',
             first_name='Test',
             last_name='User',
@@ -22,6 +23,7 @@ class UserAccountTests(APITestCase):
         url = reverse('user-register')
         data = {
             'username': 'newuser',
+            'email' : 'newuser@example.com',
             'password': 'newpassword123',
             'first_name': 'New',
             'last_name': 'User',
@@ -31,6 +33,7 @@ class UserAccountTests(APITestCase):
             'birthdate': '2000-01-01'
         }
         response = self.client.post(url, data)
+        print(response.data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['username'], 'newuser')
 

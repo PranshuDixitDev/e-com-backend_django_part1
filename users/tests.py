@@ -33,7 +33,6 @@ class UserAccountTests(APITestCase):
             'birthdate': '2000-01-01'
         }
         response = self.client.post(url, data)
-        print(response.data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['username'], 'newuser')
 

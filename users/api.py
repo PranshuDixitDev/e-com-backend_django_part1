@@ -1,16 +1,19 @@
+from django_ratelimit.decorators import ratelimit
 from django.contrib.auth import get_user_model, authenticate
 from django.db.models import Q
-
 from rest_framework import status, views
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import UserSerializer
 from django.db import IntegrityError
 from django.utils.timezone import now
+from django.utils.decorators import method_decorator
+
 
 User = get_user_model()
 
 class UserRegisterAPIView(views.APIView):
+    @method_decorator(ratelimit(key='ip', rate='5/m'))
     def post(self, request):
         serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
@@ -25,6 +28,7 @@ class UserRegisterAPIView(views.APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UserLoginAPIView(views.APIView):
+    @method_decorator(ratelimit(key='ip', rate='10/m'))
     def post(self, request):
         login = request.data.get('login')
         password = request.data.get('password')

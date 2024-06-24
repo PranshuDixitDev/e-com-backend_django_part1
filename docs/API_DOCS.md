@@ -96,7 +96,7 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
 
 `````
 
-### 2. Login
+### Login
 
 * **URL**: `/api/users/login/`
 * **Method**: `POST`
@@ -123,3 +123,113 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
 
 
   ```
+
+### Category List
+
+* **URL**: `/api/categories/`
+* **Method**: `GET`
+* **Authentication Required**: No (for listing), Yes (for creating)
+* **Data Constraints (for POST request):**
+```json
+
+{
+  "category_id": "[unique category id]",
+  "name": "[category name]",
+  "description": "[category description]",
+  "image": "[upload image file]"
+}
+
+
+```
+
+### Success Response(Code: 200 OK for GET, 201 CREATED for POST)
+### GET :
+```json
+[
+  {
+    "category_id": "001",
+    "name": "Electronics",
+    "description": "Gadgets and more",
+    "tags": ["Smartphone", "Laptop", "Tablet"],
+    "image": "url_to_image"
+  }
+]
+
+```
+
+### POST :
+```json
+{
+  "category_id": "002",
+  "name": "Books",
+  "description": "Read more",
+  "tags": ["Fiction", "Non-Fiction"],
+  "image": "url_to_newly_uploaded_image"
+}
+
+```
+### Error Response :
+
+```json
+{
+  "error": "Permissions required"
+}
+```
+
+
+++
+
+### Category Detail
+
+* **URL**: `/api/categories/{category_id}/`
+* **Method**: `GET`, `PUT`, `PATCH`, `DELETE`
+* **Authentication Required**: No (for GET), Yes (for PUT, PATCH, DELETE)
+* **Data Constraints (for PUT/PATCH request):**
+```json
+
+{
+  "name": "[new category name]",
+  "description": "[new category description]",
+  "tags": ["Updated", "Tags"],
+  "image": "[new image or keep existing]"
+}
+
+
+```
+
+### Success Response (Code: 200 OK for GET, PUT, PATCH; 204 NO CONTENT for DELETE)
+### GET :
+```json
+{
+  "category_id": "001",
+  "name": "Electronics",
+  "description": "Gadgets and more updated",
+  "tags": ["Smartphone", "Laptop", "Tablet"],
+  "image": "url_to_updated_image"
+}
+
+
+```
+
+### PUT/PATCH:
+```json
+{
+  "category_id": "001",
+  "name": "Updated Category Name",
+  "description": "Updated description here",
+  "tags": ["Updated", "Tags"],
+  "image": "url_to_updated_image"
+}
+
+```
+### DELETE:
+```json
+{}
+```
+### Error Response :
+
+```json
+{
+  "error": "Invalid category ID or insufficient permissions"
+}
+```

@@ -26,7 +26,10 @@ class UserSerializer(serializers.ModelSerializer):
         }
 
     def create(self, validated_data):
-        user = User(**validated_data)
-        user.set_password(validated_data['password'])
-        user.save()
+         # Use the built-in create_user method to handle user creation securely, ensuring that passwords are hashed.
+        user = User.objects.create_user(**validated_data)
         return user
+        # user = User(**validated_data)
+        # user.set_password(validated_data['password'])
+        # user.save()
+        # return user

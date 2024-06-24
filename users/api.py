@@ -5,7 +5,7 @@ from rest_framework import status, views
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import UserSerializer
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.utils.timezone import now
 from django.utils.decorators import method_decorator
 
@@ -13,19 +13,20 @@ from django.utils.decorators import method_decorator
 User = get_user_model()
 
 class UserRegisterAPIView(views.APIView):
-    @method_decorator(ratelimit(key='ip', rate='5/m'))
+    @method_decorator(ratelimit(key='ip', rate='5/m', method='POST'))
     def post(self, request):
-        serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            try:
-                user = serializer.save()
-                return Response({"id": user.id, "username": user.username}, status=status.HTTP_201_CREATED)
-            except IntegrityError as e:
-                # Here, parse the error message to provide a more user-friendly response
-                if 'phone_number' in str(e):
-                    return Response({"error": "A user with this phone number already exists."}, status=status.HTTP_409_CONFLICT)
-                return Response({"error": str(e)}, status=status.HTTP_409_CONFLICT)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            serializer = UserSerializer(data=request.data)
+            if serializer.is_valid():
+                try:
+                    user = serializer.save()
+                    return Response({"id": user.id, "username": user.username}, status=status.HTTP_201_CREATED)
+                except IntegrityError as e:
+                    # Enhanced error handling for a better user experience
+                    if 'phone_number' in str(e):
+                        return Response({"error": "Registration failed, possibly due to duplicate information."}, status=status.HTTP_409_CONFLICT)
+                    return Response({"error": str(e)}, status=status.HTTP_409_CONFLICT)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UserLoginAPIView(views.APIView):
     @method_decorator(ratelimit(key='ip', rate='10/m'))

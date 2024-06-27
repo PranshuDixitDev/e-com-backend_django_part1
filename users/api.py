@@ -8,11 +8,14 @@ from .serializers import UserSerializer
 from django.db import IntegrityError, transaction
 from django.utils.timezone import now
 from django.utils.decorators import method_decorator
+from rest_framework.permissions import AllowAny
 
 
 User = get_user_model()
 
 class UserRegisterAPIView(views.APIView):
+    permission_classes = [AllowAny]  # Allow unregistered users to access this view
+
     @method_decorator(ratelimit(key='ip', rate='5/m', method='POST'))
     def post(self, request):
         with transaction.atomic():
@@ -29,6 +32,8 @@ class UserRegisterAPIView(views.APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UserLoginAPIView(views.APIView):
+    permission_classes = [AllowAny]  # Allow unregistered users to access this view
+
     @method_decorator(ratelimit(key='ip', rate='10/m'))
     def post(self, request):
         login = request.data.get('login')
@@ -43,6 +48,5 @@ class UserLoginAPIView(views.APIView):
             return Response({
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
-            })
-        else:
-            return Response({"error": "Invalid Credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+            }, status=status.HTTP_200_OK)
+        return Response({"error": "Invalid Credentials"}, status=status.HTTP_401_UNAUTHORIZED)

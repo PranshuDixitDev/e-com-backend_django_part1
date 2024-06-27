@@ -4,6 +4,8 @@ from taggit.managers import TaggableManager
 import re
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
+import os
+
 
 def validate_image(image):
     """ Validates the size and format of the uploaded image. """
@@ -31,14 +33,20 @@ class Product(models.Model):
     description = models.TextField()
     category = models.ForeignKey(Category, related_name='products', on_delete=models.CASCADE)
     tags = TaggableManager()
+    inventory = models.IntegerField(default=0, validators=[MinValueValidator(0)])
 
     def __str__(self):
         return self.name
 
+def product_image_path(instance, filename):
+    # Files will be uploaded to MEDIA_ROOT/products/<product_id>/<filename>
+    return 'products/{0}/{1}'.format(instance.product.id, filename)
+
+
 class ProductImage(models.Model):
     """ Model to manage images associated with products. """
     product = models.ForeignKey(Product, related_name='images', on_delete=models.CASCADE)
-    image = models.ImageField(upload_to='products/', validators=[validate_image])
+    image = models.ImageField(upload_to=product_image_path, validators=[validate_image])
     description = models.CharField(max_length=255, blank=True)
 
     def __str__(self):

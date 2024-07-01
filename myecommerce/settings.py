@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 from pathlib import Path
 from decouple import config
 import os
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -71,7 +72,24 @@ INSTALLED_APPS = [
     'categories',
     'products',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
 ]
+
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # Short-lived access tokens
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),     # Reasonable period for refresh tokens
+    'ROTATE_REFRESH_TOKENS': True,                   # Rotate refresh tokens upon each use
+    'BLACKLIST_AFTER_ROTATION': True,                # Blacklist old tokens after rotation
+    'ALGORITHM': 'HS256',                            # Standard signing algorithm
+    'SIGNING_KEY': config('SECRET_KEY'),             # Use Django's secret key for signing JWTs
+    'VERIFYING_KEY': None,                           # Typically the same as SIGNING_KEY unless using asymmetric keys
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'TOKEN_TYPE_CLAIM': 'token_type',
+}
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -106,6 +124,11 @@ MIDDLEWARE = [
 CSP_DEFAULT_SRC = ("'none'",)
 CSP_SCRIPT_SRC = ("'self'", 'https://apis.example.com')
 CSP_STYLE_SRC = ("'self'", 'https://fonts.googleapis.com')
+
+CSRF_COOKIE_SECURE = True  # Use secure cookies for CSRF token
+SESSION_COOKIE_SECURE = True  # Use secure cookies for the session cookie
+CSRF_COOKIE_HTTPONLY = True  # HttpOnly flag for CSRF cookie (if applicable)
+
 
 ROOT_URLCONF = 'myecommerce.urls'
 

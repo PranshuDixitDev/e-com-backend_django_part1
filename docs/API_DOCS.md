@@ -233,3 +233,38 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
   "error": "Invalid category ID or insufficient permissions"
 }
 ```
+
+## Logout
+
+* **URL**: `/api/users/logout/`
+* **Method**: `POST`
+* **Authentication Required**: Yes
+
+## Headers
+
+```json
+Authorization: Bearer [access_token]
+
+```
+
+```json
+{
+  "refresh": "[refresh_token]"
+}
+```
+
+### Success Response  (Code: 205 RESET CONTENT)
+
+```json
+{
+  "message": "Logout successful, token invalidated."
+}
+```
+
+### Error Response
+
+```json
+{
+  "error": "Invalid token or token already expired"
+}
+```

@@ -9,6 +9,7 @@ from django.db import IntegrityError, transaction
 from django.utils.timezone import now
 from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 
 
 User = get_user_model()
@@ -50,3 +51,18 @@ class UserLoginAPIView(views.APIView):
                 'access': str(refresh.access_token),
             }, status=status.HTTP_200_OK)
         return Response({"error": "Invalid Credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+class LogoutAPIView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get("refresh")
+            token = RefreshToken(refresh_token)
+            # Attempt to blacklist the given token
+            token.blacklist()
+            # Optionally, invalidate all tokens for this user by updating a user-specific field (not shown here)
+            return Response({"success": "Logged out successfully"}, status=status.HTTP_205_RESET_CONTENT)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

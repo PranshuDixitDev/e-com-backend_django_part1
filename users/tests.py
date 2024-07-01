@@ -4,6 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
 from .models import CustomUser
+from rest_framework_simplejwt.tokens import RefreshToken
 
 
 class UserAccountTests(APITestCase):
@@ -121,3 +122,86 @@ class UserAccountTests(APITestCase):
             else:
                 self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_429_TOO_MANY_REQUESTS],
                               f"Expected rate limit error but got {response.status_code}: {response.data}")
+
+
+    def test_user_logout(self):
+        # Log in to get the access and refresh tokens
+        login_response = self.client.post(reverse('user-login'), {
+            'login': 'testuser',
+            'password': 'password123'
+        })
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', login_response.data)
+        self.assertIn('refresh', login_response.data)
+        
+        # Use the access token for logout attempt
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + login_response.data['access'])
+
+        # Attempt to logout using the refresh token
+        logout_response = self.client.post(reverse('user-logout'), {
+            'refresh': login_response.data['refresh']
+        })
+        self.assertEqual(logout_response.status_code, status.HTTP_205_RESET_CONTENT)
+
+        # Try to refresh the token using the old refresh token, which should fail
+        refresh_response = self.client.post(reverse('token_refresh'), {
+            'refresh': login_response.data['refresh']
+        })
+        self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        # Clear credentials for next tests
+        self.client.credentials()
+
+
+    def test_token_blacklisting(self):
+        # Log in to get the refresh token
+        login_response = self.client.post(reverse('user-login'), {
+            'login': 'testuser',
+            'password': 'password123'
+        })
+        refresh_token = login_response.data['refresh']
+
+        # Convert the refresh token string into a RefreshToken object
+        refresh_token_obj = RefreshToken(refresh_token)
+
+        # Blacklist the refresh token
+        refresh_token_obj.blacklist()
+
+        # Attempt to use the blacklisted refresh token to get a new access token
+        refresh_response = self.client.post(reverse('token_refresh'), {
+            'refresh': str(refresh_token_obj)
+        })
+        self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+
+    def test_multiple_sessions_handling(self):
+        # Log in multiple times to simulate multiple sessions
+        tokens = []
+        for _ in range(3):
+            login_response = self.client.post(reverse('user-login'), {
+                'login': 'testuser',
+                'password': 'password123'
+            })
+            tokens.append(login_response.data['refresh'])
+
+        # Invalidate one session
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + login_response.data['access'])  # Ensure you use the correct token
+        logout_response = self.client.post(reverse('user-logout'), {'refresh': tokens[1]})
+        print("Logout response:", logout_response.data)  # Debug output
+
+        # Clear credentials before next request
+        self.client.credentials()
+
+        # Check if the specific session is invalidated
+        refresh_response = self.client.post(reverse('token_refresh'), {'refresh': tokens[1]})
+        print("Refresh response for blacklisted token:", refresh_response.data)  # Debug output
+        self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        # Ensure other sessions are still valid
+        for index, token in enumerate([tokens[0], tokens[2]]):
+            self.client.credentials()  # Clear previous credentials
+            refresh_response = self.client.post(reverse('token_refresh'), {'refresh': token})
+            print(f"Refresh response for session {index}:", refresh_response.data)  # Debug output
+            self.assertEqual(refresh_response.status_code, status.HTTP_200_OK)
+

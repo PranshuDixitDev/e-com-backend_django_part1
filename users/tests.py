@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
 from .models import CustomUser
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.test import override_settings
 
 
 class UserAccountTests(APITestCase):
@@ -34,6 +35,9 @@ class UserAccountTests(APITestCase):
             'birthdate': '2000-01-01'
         }
 
+    def tearDown(self):
+        # Log out after each test case
+        self.client.logout()
 
     def test_user_registration(self):
         url = reverse('user-register')
@@ -54,7 +58,7 @@ class UserAccountTests(APITestCase):
 
         response = self.client.post(url, data)
         if response.status_code == 403:
-            print("Permission issues: ", response.data)
+            print("test_user_registration Permission issues: ", response.data)
         else:
             self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"Unexpected response: {response.data}")
             self.assertEqual(response.data['username'], 'newuser')
@@ -93,6 +97,7 @@ class UserAccountTests(APITestCase):
         self.assertEqual(response.data['error'], 'Invalid Credentials')
     
 
+    @override_settings(ENABLE_RATE_LIMIT=True)
     def test_rate_limit_registration(self):
         url = reverse('user-register')
 
@@ -111,7 +116,7 @@ class UserAccountTests(APITestCase):
             }
 
             response = self.client.post(url, data=unique_data)
-            print("******", response)
+            print("test_rate_limit_registration ******", response)
 
             # Verify successful registration within limit (i < 5)
             if i < 5:
@@ -188,20 +193,72 @@ class UserAccountTests(APITestCase):
         # Invalidate one session
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + login_response.data['access'])  # Ensure you use the correct token
         logout_response = self.client.post(reverse('user-logout'), {'refresh': tokens[1]})
-        print("Logout response:", logout_response.data)  # Debug output
+        print("test_multiple_sessions_handling Logout response:", logout_response.data)  # Debug output
 
         # Clear credentials before next request
         self.client.credentials()
 
         # Check if the specific session is invalidated
         refresh_response = self.client.post(reverse('token_refresh'), {'refresh': tokens[1]})
-        print("Refresh response for blacklisted token:", refresh_response.data)  # Debug output
+        print("test_multiple_sessions_handling Refresh response for blacklisted token:", refresh_response.data)  # Debug output
         self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
 
         # Ensure other sessions are still valid
         for index, token in enumerate([tokens[0], tokens[2]]):
             self.client.credentials()  # Clear previous credentials
             refresh_response = self.client.post(reverse('token_refresh'), {'refresh': token})
-            print(f"Refresh response for session {index}:", refresh_response.data)  # Debug output
+            print(f"test_multiple_sessions_handling Refresh response for session {index}:", refresh_response.data)  # Debug output
             self.assertEqual(refresh_response.status_code, status.HTTP_200_OK)
 
+
+    def test_prevent_updating_email_and_phone(self):
+        self.client.force_authenticate(user=self.user)
+        original_email = self.user.email
+        original_phone = self.user.phone_number
+        response = self.client.put(reverse('user-profile'), {
+            'email': 'newemail@example.com',  # This should not change
+            'phone_number': '+919876543210',  # This should not change
+            'first_name': 'UpdatedName'       # This should update
+        }, format='json')
+        self.user.refresh_from_db()
+
+        # Debugging output
+        print("test_prevent_updating_email_and_phone Response data:", response.data)
+        print("test_prevent_updating_email_and_phone Updated email:", self.user.email)
+        print("test_prevent_updating_email_and_phone Updated phone number:", self.user.phone_number)
+
+        # Assertions
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(self.user.email, original_email)  # Ensure email has not changed
+        self.assertEqual(self.user.phone_number, original_phone)  # Ensure phone number has not changed
+        self.assertEqual(self.user.first_name, 'UpdatedName')  # Ensure first name was updated
+
+
+    @override_settings(ENABLE_RATE_LIMIT=False)
+    def test_user_registration_with_required_and_optional_addresses(self):
+        url = reverse('user-register')
+        data = {
+            'username': 'newuser',
+            'email': 'newuser@example.com',
+            'password': 'newpassword123',
+            'first_name': 'New',
+            'last_name': 'User',
+            'phone_number': '+919000000000',
+            'address': 'Primary Address',
+            'address2': 'Optional Address 1',
+            'address3': '',  # This should be considered optional
+            'postal_code': '123456',
+            'birthdate': '1999-01-01'
+        }
+        response = self.client.post(url, data, format='json')
+        print("test_user_registration_with_required_and_optional_addresses ===", response)
+        if response.status_code != status.HTTP_201_CREATED:
+            print(f"Failed to create user: {response.data}")  # Debug output to understand what went wrong.
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNotNone(CustomUser.objects.get(username='newuser'))
+
+    def test_accessibility_of_registration_endpoint(self):
+        url = reverse('user-register')
+        response = self.client.get(url)  # Change this to a post if your endpoint doesn't support get.
+        print("test_accessibility_of_registration_endpoint Test endpoint accessibility response data:", response.data)
+        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_405_METHOD_NOT_ALLOWED])

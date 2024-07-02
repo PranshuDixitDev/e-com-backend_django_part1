@@ -10,6 +10,25 @@ from django.utils.timezone import now
 from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
+from django.conf import settings
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
+
+
+# Custom decorator that bypasses ratelimiting for tests
+
+from functools import wraps
+
+def maybe_ratelimit(*args, **kwargs):
+    def decorator(func):
+        if getattr(settings, 'ENABLE_RATE_LIMIT', True):
+            return ratelimit(*args, **kwargs)(func)
+        else:
+            @wraps(func)
+            def wrapped(request, *args, **kwargs):
+                return func(request, *args, **kwargs)
+            return wrapped
+    return decorator
 
 
 User = get_user_model()
@@ -17,8 +36,9 @@ User = get_user_model()
 class UserRegisterAPIView(views.APIView):
     permission_classes = [AllowAny]  # Allow unregistered users to access this view
 
-    @method_decorator(ratelimit(key='ip', rate='5/m', method='POST'))
+    @method_decorator(maybe_ratelimit(key='ip', rate='5/m', method='POST'))
     def post(self, request):
+        print("Permissions from UserRegisterAPIView:", self.get_permissions())
         with transaction.atomic():
             serializer = UserSerializer(data=request.data)
             if serializer.is_valid():
@@ -66,3 +86,21 @@ class LogoutAPIView(views.APIView):
             return Response({"success": "Logged out successfully"}, status=status.HTTP_205_RESET_CONTENT)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserProfileAPIView(views.APIView):
+    permission_classes = [IsAuthenticated]  # Ensures that the user must be logged in to access or modify their profile
+
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            # Prevent updating email and phone number
+            serializer.validated_data.pop('email', None)
+            serializer.validated_data.pop('phone_number', None)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

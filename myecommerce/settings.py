@@ -14,6 +14,7 @@ from pathlib import Path
 from decouple import config
 import os
 from datetime import timedelta
+import sys
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -211,3 +212,10 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Add a flag to indicate testing mode
+TESTING = 'test' in sys.argv
+if 'test' in sys.argv or sys.argv[1] == 'test':
+    ENABLE_RATE_LIMIT = False
+else:
+    ENABLE_RATE_LIMIT = True

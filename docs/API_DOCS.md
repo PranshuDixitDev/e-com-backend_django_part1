@@ -268,3 +268,33 @@ Authorization: Bearer [access_token]
   "error": "Invalid token or token already expired"
 }
 ```
+
+## Password Reset
+
+### Request Password Reset
+- **URL**: `/api/users/password_reset/`
+- **Method**: `POST`
+- **Auth Required**: No
+- **Request Body**:
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+### Success Response  (Code: 200 OK)
+
+```json
+{
+  "message": "Password reset e-mail has been sent."
+}
+```
+
+### Error Response
+
+```json
+{
+  "error": "Email address not found."
+}
+```

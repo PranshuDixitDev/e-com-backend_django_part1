@@ -74,6 +74,8 @@ INSTALLED_APPS = [
     'products',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
+    'django_rest_passwordreset',
+    'django.contrib.sites',
 ]
 
 
@@ -144,6 +146,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.request',
+                'django.contrib.sites.context_processors.current_site',
             ],
         },
     },
@@ -151,7 +155,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'myecommerce.wsgi.application'
 
-
+SITE_ID = 1
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
@@ -219,3 +223,27 @@ if 'test' in sys.argv or sys.argv[1] == 'test':
     ENABLE_RATE_LIMIT = False
 else:
     ENABLE_RATE_LIMIT = True
+
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = config('EMAIL_HOST', default='smtpout.secureserver.net')
+# EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+# EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+# EMAIL_HOST_USER = config('EMAIL_HOST_USER')  # Your GoDaddy email
+# EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')  # Your GoDaddy email password
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = config('EMAIL_HOST_USER')  # Your Gmail address
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')  # Your Gmail password
+
+
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.google.GoogleOAuth2',
+    'django.contrib.auth.backends.ModelBackend',
+)
+
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = config('GOOGLE_CLIENT_ID')
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config('GOOGLE_CLIENT_SECRET')

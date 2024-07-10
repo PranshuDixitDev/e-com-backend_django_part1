@@ -298,3 +298,36 @@ Authorization: Bearer [access_token]
   "error": "Email address not found."
 }
 ```
+
+## Confirm Password Reset
+
+### Request Password Reset
+- **URL**: `/api/users/password_reset/confirm/`
+- **Method**: `POST`
+- **Auth Required**: No
+- **Request Body**:
+
+```json
+{
+  "uid": "base64-encoded-user-id",
+  "token": "password-reset-token",
+  "new_password": "newpassword123",
+  "re_new_password": "newpassword123"
+}
+```
+
+### Success Response  (Code: 200 OK)
+
+```json
+{
+  "message": "Password has been reset successfully."
+}
+```
+
+### Error Response
+
+```json
+{
+  "error": "Invalid token or user ID"
+}
+```

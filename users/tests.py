@@ -3,7 +3,7 @@
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
-from .models import CustomUser
+from .models import CustomUser, Address
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.test import override_settings
 
@@ -17,12 +17,23 @@ class UserAccountTests(APITestCase):
             first_name='Test',
             last_name='User',
             phone_number='+919876543210',
-            address='Test Address',
-            postal_code='123456',
             birthdate='1990-01-01'
         )
+
+        # Create an address associated with the user
+        self.address = Address.objects.create(
+            user=self.user,
+            address_line1='Test Address',
+            city='Test City',
+            state='Test State',
+            country='India',
+            postal_code='123456'
+        )
+        
         self.client = APIClient()
         self.client.enforce_csrf_checks = False
+
+        # Adjust sample_data to use a nested address structure for new user registration
         self.sample_data = {
             'username': 'newuser',
             'email': 'newuser@example.com',
@@ -30,9 +41,14 @@ class UserAccountTests(APITestCase):
             'first_name': 'New',
             'last_name': 'User',
             'phone_number': '+919765432109',
-            'address': 'New Address',
-            'postal_code': '654321',
-            'birthdate': '2000-01-01'
+            'birthdate': '2000-01-01',
+            'addresses': [{
+                'address_line1': 'New Address',
+                'city': 'New City',
+                'state': 'New State',
+                'country': 'India',
+                'postal_code': '654321'
+            }]
         }
 
     def tearDown(self):
@@ -42,26 +58,30 @@ class UserAccountTests(APITestCase):
     def test_user_registration(self):
         url = reverse('user-register')
         data = {
-            'username': 'newuser',
-            'email' : 'newuser@example.com',
-            'password': 'newpassword123',
-            'first_name': 'New',
-            'last_name': 'User',
-            'phone_number': '+919765432109',
-            'address': 'New Address',
-            'postal_code': '654321',
-            'birthdate': '2000-01-01'
+            "username": "newuser1",
+            "email": "newuser1@example.com",
+            "password": "newpassword123",
+            "first_name": "New",
+            "last_name": "User",
+            "phone_number": "+919000000001",
+            "birthdate": "2000-01-01",
+            "addresses": [
+                {
+                    "address_line1": "123 Main St",
+                    "address_line2": "",
+                    "city": "Anytown",
+                    "state": "Anystate",
+                    "country": "India",
+                    "postal_code": "123456"
+                }
+            ]
         }
 
-        # Authenticate as necessary here before the request if your setup requires it.
-        self.client.login(username='testuser', password='password123')  # Only if login is required
-
-        response = self.client.post(url, data)
-        if response.status_code == 403:
-            print("test_user_registration Permission issues: ", response.data)
-        else:
-            self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"Unexpected response: {response.data}")
-            self.assertEqual(response.data['username'], 'newuser')
+        # Make sure to use format='json' to correctly handle the nested data structure
+        response = self.client.post(url, data, format='json')
+        print("8888888888888", response)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"Unexpected response: {response.data}")
+        self.assertEqual(response.data['username'], 'newuser1')
 
 
     def test_user_login_with_username(self):
@@ -110,12 +130,18 @@ class UserAccountTests(APITestCase):
                 'first_name': 'New',
                 'last_name': 'User',
                 'phone_number': f'+919000{i}54321',
-                'address': 'New Address',
-                'postal_code': '654321',
-                'birthdate': '2000-01-01'
+                'birthdate': '2000-01-01',
+                'addresses': [{
+                    'address_line1': '123 Main St',
+                    'address_line2': '',
+                    'city': 'Anytown',
+                    'state': 'Anystate',
+                    'country': 'India',
+                    'postal_code': '123456'
+                }]
             }
-
-            response = self.client.post(url, data=unique_data)
+            
+            response = self.client.post(url, data=unique_data, format='json')
             print("test_rate_limit_registration ******", response)
 
             # Verify successful registration within limit (i < 5)
@@ -243,12 +269,15 @@ class UserAccountTests(APITestCase):
             'password': 'newpassword123',
             'first_name': 'New',
             'last_name': 'User',
-            'phone_number': '+919000000000',
-            'address': 'Primary Address',
-            'address2': 'Optional Address 1',
-            'address3': '',  # This should be considered optional
-            'postal_code': '123456',
-            'birthdate': '1999-01-01'
+            'phone_number': '+919765432109',
+            'birthdate': '2000-01-01',
+            'addresses': [{
+                'address_line1': 'New Address',
+                'city': 'New City',
+                'state': 'New State',
+                'country': 'India',
+                'postal_code': '654321'
+            }]
         }
         response = self.client.post(url, data, format='json')
         print("test_user_registration_with_required_and_optional_addresses ===", response)
@@ -262,3 +291,38 @@ class UserAccountTests(APITestCase):
         response = self.client.get(url)  # Change this to a post if your endpoint doesn't support get.
         print("test_accessibility_of_registration_endpoint Test endpoint accessibility response data:", response.data)
         self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_405_METHOD_NOT_ALLOWED])
+
+    def test_user_registration_with_multiple_addresses(self):
+        url = reverse('user-register')
+        data = {
+            "username": "newuser2",
+            "email": "newuser2@example.com",
+            "password": "newpassword123",
+            "first_name": "New",
+            "last_name": "User",
+            "phone_number": "+919000000002",
+            "birthdate": "2000-01-01",
+            "addresses": [
+                {
+                    "address_line1": "123 Main St",
+                    "city": "Anytown",
+                    "state": "Anystate",
+                    "country": "India",
+                    "postal_code": "123456"
+                },
+                {
+                    "address_line1": "456 Side St",
+                    "city": "Othertown",
+                    "state": "Otherstate",
+                    "country": "India",
+                    "postal_code": "654321"
+                }
+            ]
+        }
+
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('addresses', response.data, "Address data should be part of the response.")
+        self.assertEqual(len(response.data['addresses']), 2)
+        self.assertEqual(response.data['addresses'][0]['city'], 'Anytown')
+        self.assertEqual(response.data['addresses'][1]['city'], 'Othertown')

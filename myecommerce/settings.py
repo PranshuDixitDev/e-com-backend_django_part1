@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'django_rest_passwordreset',
     'django.contrib.sites',
+    'social_django',
 ]
 
 

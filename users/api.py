@@ -4,7 +4,8 @@ from django.db.models import Q
 from rest_framework import status, views
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import UserSerializer
+from users.models import Address
+from .serializers import UserSerializer, AddressSerializer
 from django.db import IntegrityError, transaction
 from django.utils.timezone import now
 from django.utils.decorators import method_decorator
@@ -20,6 +21,8 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_str
 from rest_framework.response import Response
 from .tokens import custom_token_generator
+from rest_framework import generics
+
 
 
 
@@ -52,7 +55,7 @@ class UserRegisterAPIView(views.APIView):
             if serializer.is_valid():
                 try:
                     user = serializer.save()
-                    return Response({"id": user.id, "username": user.username}, status=status.HTTP_201_CREATED)
+                    return Response(serializer.data, status=status.HTTP_201_CREATED)
                 except IntegrityError as e:
                     # Enhanced error handling for a better user experience
                     if 'phone_number' in str(e):
@@ -109,9 +112,29 @@ class UserProfileAPIView(views.APIView):
             # Prevent updating email and phone number
             serializer.validated_data.pop('email', None)
             serializer.validated_data.pop('phone_number', None)
-            serializer.save()
+            user = serializer.save()
+
+            # Handle address updates
+            addresses_data = request.data.get('addresses', [])
+            existing_addresses = {addr.id: addr for addr in user.addresses.all()}
+
+            for address_data in addresses_data:
+                address_id = address_data.get('id')
+                if address_id and address_id in existing_addresses:
+                    # Update existing address
+                    address = existing_addresses.pop(address_id)
+                    for attr, value in address_data.items():
+                        setattr(address, attr, value)
+                    address.save()
+                else:
+                    # Create new address
+                    Address.objects.create(user=user, **address_data)
+
+            # No need to delete any addresses as we're not handling explicit deletions here
+
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class CustomPasswordResetConfirmView(APIView):
@@ -132,3 +155,38 @@ class CustomPasswordResetConfirmView(APIView):
             return Response({"errors": form.errors}, status=400)
 
         return Response({"error": "Invalid token or user"}, status=400)
+    
+
+class AddressListCreateAPIView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = AddressSerializer
+
+    def get_queryset(self):
+        user_id = self.request.query_params.get('user_id')
+        if self.request.user.is_staff and user_id:
+            return Address.objects.filter(user_id=user_id)
+        return Address.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        user_id = self.request.data.get('user_id')
+        if self.request.user.is_staff and user_id:
+            serializer.save(user_id=user_id)
+        else:
+            serializer.save(user=self.request.user)
+
+class AddressDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = AddressSerializer
+
+    def get_queryset(self):
+        user_id = self.request.query_params.get('user_id')
+        if self.request.user.is_staff and user_id:
+            return Address.objects.filter(user_id=user_id)
+        return Address.objects.filter(user=self.request.user)
+
+    def get_object(self):
+        queryset = self.get_queryset()
+        filter_kwargs = {'pk': self.kwargs['pk']}
+        obj = generics.get_object_or_404(queryset, **filter_kwargs)
+        self.check_object_permissions(self.request, obj)
+        return obj

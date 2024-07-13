@@ -59,39 +59,82 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
 ## Endpoints
 
 ### Register
+
 - **URL**: `/api/users/register/`
 - **Method**: `POST`
 - **Auth Required**: No
 - **Data Constraints**:
   ```json
   {
-    "username": "[unique username]",
-    "password": "[password]",
-    "email": "[valid email address]",
-    "phone_number": "[unique phone number in +919876543210 format]",
-    "address": "[user address]",
-    "postal_code": "[postal code]",
-    "birthdate": "[date in YYYY-MM-DD format]"
+    "username": "[unique username required]",
+    "password": "[password required]",
+    "email": "[valid email address required]",
+    "phone_number": "[unique phone number in +919876543210 format required]",
+    "birthdate": "[date in YYYY-MM-DD format optional]"
   }
 
+### Request Body Example
 
+```json
+{
+  "username": "newuser01",
+  "email": "newuser01@example.com",
+  "password": "newpassword123",
+  "first_name": "New",
+  "last_name": "User",
+  "phone_number": "+919000000011",
+  "birthdate": "2000-01-01",
+  "addresses": [
+    {
+      "address_line1": "123 Main St",
+      "city": "Anytown",
+      "state": "Anystate",
+      "country": "India",
+      "postal_code": "123456"
+    }
+  ]
+}
+
+`````
 ### Success Response (Code: 201 CREATED)
 
 
 ```json
 
 {
-  "id": "[new user id]",
-  "username": "[username]"
+  "username": "newuser01",
+  "first_name": "New",
+  "last_name": "User",
+  "email": "newuser01@example.com",
+  "phone_number": "+919000000011",
+  "addresses": [
+    {
+      "id": 11,
+      "address_line1": "123 Main St",
+      "address_line2": "",
+      "city": "Anytown",
+      "state": "Anystate",
+      "country": "India",
+      "postal_code": "123456"
+    }
+  ],
+  "birthdate": "2000-01-01"
 }
 
 `````
-### Error Response:
+### Error Response(Code: 400 Bad Request):
 
 ```json
-
 {
-  "error": "A user with this phone number already exists."
+  "error": "A user with this phone number or email already exists."
+}
+`````
+
+### Error Response(Code: 409 Conflict):
+
+```json
+{
+  "error": "A user with this username or phone number already exists."
 }
 
 `````
@@ -123,6 +166,224 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
 
 
   ```
+
+## Address Management
+
+### List and Create Addresses
+- **URL**: `/api/users/addresses/`
+- **Method**: `GET` for listing, `POST` for creating
+- **Auth Required**: Yes
+- **Permissions**: User must be authenticated
+- **Data Constraints** (for POST):
+  ```json
+  {
+    "address_line1": "[street address]",
+    "address_line2": "[apartment, suite, unit, building, floor, etc.]",
+    "city": "[city]",
+    "state": "[state/province/region]",
+    "country": "[country]",
+    "postal_code": "[postal/ZIP code]"
+  }
+
+### Success Response for GET  (Code: 200 OK)
+
+```json
+[
+  {
+    "id": 1,
+    "address_line1": "123 Main St",
+    "address_line2": "",
+    "city": "Anytown",
+    "state": "Anystate",
+    "country": "India",
+    "postal_code": "123456"
+  }
+]
+
+```
+
+### Error Response
+
+```json
+{
+  "error": "Invalid token or user ID"
+}
+```
+
+### Success Response for POST  (Code: 201 CREATED)
+
+```json
+[
+  {
+    "id": 1,
+    "address_line1": "123 Main St",
+    "address_line2": "",
+    "city": "Anytown",
+    "state": "Anystate",
+    "country": "India",
+    "postal_code": "123456"
+  }
+]
+
+```
+
+### Error Response (Code: 400 BAD REQUEST)
+
+```json
+{
+  "error": "Invalid data provided"
+}
+```
+
+## Address Detail, Update, and Delete
+- **URL**: `/api/users/addresses/{id}/`
+- **Method**: `GET` for detail, `PUT`/`PATCH` for update, `DELETE` for delete
+- **Auth Required**: Yes
+- **Permissions**:  User must be authenticated and own the address
+- **Data Constraints** (for GET):
+
+### Success Response for GET  (Code: 200 OK)
+```json
+{
+  "id": 1,
+  "address_line1": "123 Main St",
+  "address_line2": "",
+  "city": "Anytown",
+  "state": "Anystate",
+  "country": "India",
+  "postal_code": "123456"
+}
+```
+
+### Success Response for PUT/PATCH (Code: 200 OK)
+```json
+{
+  "message": "Address updated successfully."
+}
+```
+
+### Success Response for DELETE (Code: 204 NO CONTENT)
+```json
+{}
+```
+
+### Error Response (Code: 404 NOT FOUND)
+
+```json
+{
+  "error": "Address not found."
+}
+
+```
+
+## User Profile Retrieval
+
+### List and Create Addresses
+- **URL**: `/api/users/user-profile/`
+- **Method**: `GET` 
+- **Auth Required**: Yes (Bearer Token required)
+- **Permissions**: User must be authenticated
+- **Description**: This endpoint retrieves the authenticated user's profile information, including a list of associated addresses. Each user profile contains personal information alongside nested details about each registered address.
+- **Data Constraints** (for GET):
+
+### Success Response for GET  (Code: 200 OK)
+  ```json
+  {
+    "username": "newuser1",
+    "first_name": "UpdatedName",
+    "last_name": "UpdatedSurname",
+    "email": "newuser1@example.com",
+    "phone_number": "+919000000001",
+    "addresses": [
+      {
+        "id": 1,
+        "address_line1": "123 Main St",
+        "address_line2": null,
+        "city": "Anytown",
+        "state": "Anystate",
+        "country": "India",
+        "postal_code": "123456"
+      },
+      {
+        "id": 2,
+        "address_line1": "456 New St",
+        "address_line2": null,
+        "city": "Test",
+        "state": "Anystate",
+        "country": "India",
+        "postal_code": "123456"
+      }
+    ]
+  }
+
+  ```
+
+### Error Response (Code 401 Unauthorized)
+
+```json
+{
+  "detail": "Authentication credentials were not provided."
+}
+```
+
+### Error Response (Code 403 Forbidden)
+```json
+{
+  "detail": "You do not have permission to perform this action."
+}
+```
+
+## Updating User Profile
+
+### List and Create Addresses
+- **URL**: `/api/users/user-profile/`
+- **Method**: `PUT` 
+- **Auth Required**: Yes (Bearer Token required)
+- **Permissions**: User must be authenticated
+- **Description**:  Allows authenticated users to update their profile information, including one or multiple addresses.
+- **Note**: The id in the address data is used to specify which address to update. Omitting id results in a new address creation.
+- **Data Constraints** (for GET):
+
+### Request Body
+  ```json
+  {
+  "first_name": "UpdatedName",
+  "last_name": "UpdatedSurname",
+  "phone_number": "+919000000001",
+  "addresses": [
+    {
+      "id": 2,
+      "address_line1": "456 New St",
+      "city": "updated",
+      "state": "Newsupdatedstate",
+      "country": "India",
+      "postal_code": "654321"
+    }
+  ]
+}
+  ```
+
+### Error Response (Code 400 Bad Request)
+
+```json
+{
+  "error": "Invalid input data"
+}
+```
+
+### Error Response (Code 401 Unauthorized)
+```json
+{
+  "detail": "Authentication credentials were not provided."
+}
+```
+
+### Error Response (Code 403 Forbidden)
+```json
+{
+  "detail": "You do not have permission to perform this action."
+}
+```
 
 ### Category List
 

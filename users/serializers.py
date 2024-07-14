@@ -28,7 +28,7 @@ class UserSerializer(serializers.ModelSerializer):
     """
     email = serializers.EmailField(validators=[validate_email, UniqueValidator(queryset=User.objects.all())])
     phone_number = serializers.CharField(validators=[RegexValidator(regex=r'^\+91\d{10}$'), UniqueValidator(queryset=User.objects.all())])
-    addresses = AddressSerializer(many=True, required=True)  # Handle multiple addresses
+    addresses = AddressSerializer(many=True, required=False)  # Handle multiple addresses
 
     class Meta:
         model = User
@@ -45,7 +45,7 @@ class UserSerializer(serializers.ModelSerializer):
         }
 
     def create(self, validated_data):
-        addresses_data = validated_data.pop('addresses')
+        addresses_data = validated_data.pop('addresses', [])
         user = User.objects.create_user(**validated_data)
         for address_data in addresses_data:
             Address.objects.create(user=user, **address_data)

@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     'django_rest_passwordreset',
     'django.contrib.sites',
     'social_django',
+    'corsheaders',
 ]
 
 
@@ -115,6 +116,7 @@ REST_FRAMEWORK = {
 AUTH_USER_MODEL = 'users.CustomUser' 
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -133,6 +135,17 @@ CSRF_COOKIE_SECURE = True  # Use secure cookies for CSRF token
 SESSION_COOKIE_SECURE = True  # Use secure cookies for the session cookie
 CSRF_COOKIE_HTTPONLY = True  # HttpOnly flag for CSRF cookie (if applicable)
 
+# Allow all origins
+CORS_ALLOW_ALL_ORIGINS = True  # Be cautious with this in production
+
+# Or, allow specific origins
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:8000',  # Allow local development
+    # 'https://example.com',
+]
+
+# If you need to expose specific headers, you can use:
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
 ROOT_URLCONF = 'myecommerce.urls'
 

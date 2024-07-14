@@ -7,7 +7,7 @@ from django.core.validators import RegexValidator
 class CustomUser(AbstractUser):
     phone_validator = RegexValidator(regex=r'^\+91\d{10}$', message="Phone number must be entered in the format: '+919999999999'.")
     phone_number = models.CharField(validators=[phone_validator], max_length=14, unique=True)
-    birthdate = models.DateField(null=True, blank=True)  # Optional for superuser
+    birthdate = models.DateField(null=True, blank=False)  # Optional for superuser
 
     class Meta:
         verbose_name = 'user'

@@ -70,10 +70,25 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
     "password": "[password required]",
     "email": "[valid email address required]",
     "phone_number": "[unique phone number in +919876543210 format required]",
-    "birthdate": "[date in YYYY-MM-DD format optional]"
+    "birthdate": "[date in YYYY-MM-DD format optional]",
+    "addresses": "[optional - array of address objects]"
   }
+### Request Body Example (Addresses Not Needed for Registration)
 
-### Request Body Example
+```json
+{
+  "username": "newuser01",
+  "email": "newuser01@example.com",
+  "password": "newpassword123",
+  "first_name": "New",
+  "last_name": "User",
+  "phone_number": "+919000000011",
+  "birthdate": "2000-01-01"
+}
+
+
+`````
+### Request Body Example (With Addresses)
 
 ```json
 {

@@ -607,3 +607,246 @@ Authorization: Bearer [access_token]
   "error": "Invalid token or user ID"
 }
 ```
+
+# Bulk Upload Functionality Documentation
+
+## Overview
+This document provides an overview of the bulk upload functionality implemented for the product management module in the e-commerce backend. The functionality allows admin users to upload multiple products at once using a CSV file, significantly simplifying the process of populating the product database.
+
+## Features
+1. **CSV File Upload**:
+   - Admin users can upload products in bulk by submitting a CSV file.
+   - The CSV file needs to include specific columns like name, description, category ID, inventory, and price-weight combinations.
+
+2. **Error Handling**:
+   - The system validates the CSV file for the correct format and completeness.
+   - Errors are reported back to the user, including missing fields, data format errors, and validation issues such as duplicate product names or nonexistent category IDs.
+
+3. **Security and Permissions**:
+   - Only users with admin privileges can perform bulk uploads, ensuring that the functionality is securely managed.
+
+## How It Works
+1. **Uploading the CSV**:
+   - Admin users access the bulk upload feature through a dedicated API endpoint.
+   - They must provide a well-formatted CSV file containing the product data.
+
+2. **Validation**:
+   - The system checks each row of the CSV for errors.
+   - It validates against existing data to prevent duplicates and checks for the existence of referenced entities like product categories.
+
+3. **Database Update**:
+   - Valid entries are saved to the database.
+   - Each new product entry includes details such as name, description, inventory levels, and associated category.
+
+4. **CSV File Format Requirements**:
+  The CSV file should include headers and the following columns:
+
+  - name: The product's name (unique).
+  - description: A brief description of the product.
+  - category_id: The ID of the category this product belongs to.
+  - inventory: The number of items available.
+  - price_weights: Combinations of price and weight, separated by commas. 
+5. **Example CSV content**:
+      - name,description,category_id,inventory,price_weights
+      - Smartphone,Latest model smartphone,001,100,2000-100gms,3000-200gms,4000-300gms
+      - Laptop,High performance laptop,002,50,50000-1kg,75000-1.5kg,100000-2kg
+
+
+
+## API Endpoint
+- **Bulk Upload Endpoint**:
+  - **Method**: POST
+  - **URL**: `/api/products/bulk-upload/`
+  - **Authentication**: Required (Admin only)
+  - **Data Constraints (for POST request)**:
+  ```json
+  {
+  "file": "Uploaded file (CSV or Excel)"
+  }
+  ```
+
+### Success Response  (Code: 201 CREATED)
+
+```json
+{
+  "status": "success",
+  "message": "Products uploaded successfully"
+}
+```
+
+### Error Response (Detailed)
+
+```json
+{
+  "error": "Detailed error messages including any row-specific issues."
+}
+```
+
+## Error Reporting
+Errors during the upload process are detailed in the response, providing clear feedback to the user. This includes information on any row that fails to process due to validation issues or incorrect data formatting.
+
+## Usage Example
+To use the bulk upload feature, admin users will:
+
+1. Prepare a CSV file with the required data columns.
+2. Log in to obtain authentication credentials.
+3. Send a POST request to the bulk upload endpoint with the CSV file attached.
+
+## Conclusion
+The bulk upload functionality enhances the backend's capabilities by allowing quick and efficient updates to the product catalog, making it an essential tool for administrative users managing large datasets.
+
+
+
+### Products CRUD Docs :
+
+
+- **List and Create Products**:
+  
+  - **API Endpoint**:
+  - **Method**: `GET` FOR LISTING, `POST` FOR CREATING
+  - **URL**: `/api/products/`
+  - **Authentication**: Yes (Admin for POST, No authentication for GET)
+  - **Permissions**: `GET` is public, `POST` requires admin privileges
+  
+### Product POST Request Body :
+  ```json
+  {
+  "name": "[unique product name required]",
+  "description": "[product description required]",
+  "category_id": "[existing category ID required]",
+  "inventory": "[quantity in stock]",
+  "price_weights": "[formatted as price-weight pairs, e.g., 2000-100gms]",
+  "tags": "[optional, list of tags]",
+  "image_urls": "[optional, list of image URLs]"
+  }
+
+  ```
+
+### Success Response for GET  (Code: 200 OK)
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Smartphone",
+    "description": "Latest model",
+    "category": {
+      "id": 1,
+      "name": "Electronics"
+    },
+    "inventory": 100,
+    "price_weights": "2000-100gms,3000-200gms,4000-300gms",
+    "tags": ["Electronics", "Gadgets"],
+    "image_urls": ["http://example.com/image1.jpg"]
+  }
+]
+
+```
+
+### Success Response for POST  (Code: 201 CREATED):
+
+```json
+{
+  "id": 2,
+  "name": "Laptop",
+  "description": "High performance",
+  "category": {
+    "id": 2,
+    "name": "Computing"
+  },
+  "inventory": 50,
+  "price_weights": "50000-1kg,75000-1.5kg,100000-2kg",
+  "tags": ["Computing", "High-End"],
+  "image_urls": ["http://example.com/image2.jpg"]
+}
+
+
+```
+### Error Response (Code: 400 Bad Request)
+
+```json
+{
+  "error": "Product with this name already exists or missing required fields"
+}
+```
+
+
+
+- **Product Detail, Update, and Delete**:
+
+  - **API Endpoint**:
+  - **Method**: `GET` FOR detail, `PUT/PATCH` for update, `DELETE` for delete
+  - **URL**: `/api/products/{id}/`
+  - **Authentication**: Yes
+  - **Permissions**: User must be authenticated; admin for `PUT/PATCH/DELETE`
+  
+
+### Success Response for GET (Code: 200 OK):
+
+```json
+{
+  "id": 1,
+  "name": "Smartphone",
+  "description": "Latest model smartphone",
+  "category": {
+    "id": 1,
+    "name": "Electronics"
+  },
+  "inventory": 100,
+  "price_weights": "2000-100gms,3000-200gms,4000-300gms",
+  "tags": ["Electronics", "Gadgets"],
+  "image_urls": ["http://example.com/image1.jpg"]
+}
+```
+
+### Product PUT Request Body:
+```json
+{
+  "name": "Updated Product Name",
+  "description": "Updated Description",
+  "category_id": 1,
+  "inventory": 150,
+  "price_weights": "2500-100gms,3500-200gms",
+  "tags": ["Updated", "Tags"],
+  "image_urls": ["http://example.com/updated_image.jpg"]
+}
+```
+
+### Success Response for PUT/PATCH (Code: 200 OK):
+
+```json
+{
+  "message": "Product updated successfully."
+}
+```
+
+### Product DELETE Operation:
+
+- **Description**: Deletes the product with the specified ID.
+- **URL**: `/api/products/{id}/`
+- **Method**: `DELETE`
+- **Auth Required**: Yes
+- **Permissions**: Admin
+
+
+### Success Response for DELETE (Code: 204 NO CONTENT):
+```json
+{}
+```
+
+
+### Error Response (Code: 404 NOT FOUND):
+```json
+{
+  "error": "Product not found."
+}
+```
+
+
+## Usage Example:
+
+-**To manage products, users will**:
+
+  1. Prepare the necessary data in the format specified above
+  2. Authenticate to obtain necessary credentials if required
+  3. Send appropriate HTTP requests to the endpoints to list, create, update, or delete product records

@@ -13,17 +13,21 @@ from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
 from django.conf import settings
 from django.utils.decorators import method_decorator
-from django.utils.http import urlsafe_base64_decode
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from rest_framework.views import APIView
 from django.urls import reverse_lazy
 from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.auth.tokens import default_token_generator
-from django.utils.encoding import force_str
+from django.utils.encoding import force_bytes, force_str
 from rest_framework.response import Response
 from .tokens import custom_token_generator
 from rest_framework import generics
-
-
+from .tokens import email_verification_token, custom_token_generator
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.urls import reverse
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.core.mail import EmailMultiAlternatives
 
 
 # Custom decorator that bypasses ratelimiting for tests
@@ -55,6 +59,7 @@ class UserRegisterAPIView(views.APIView):
             if serializer.is_valid():
                 try:
                     user = serializer.save()
+                    self.send_verification_email(user)
                     return Response(serializer.data, status=status.HTTP_201_CREATED)
                 except IntegrityError as e:
                     # Enhanced error handling for a better user experience
@@ -62,6 +67,33 @@ class UserRegisterAPIView(views.APIView):
                         return Response({"error": "Registration failed, possibly due to duplicate information."}, status=status.HTTP_409_CONFLICT)
                     return Response({"error": str(e)}, status=status.HTTP_409_CONFLICT)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+    def send_verification_email(self, user):
+        token = email_verification_token.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        verification_url = reverse('email-verify', kwargs={'uidb64': uid, 'token': token})
+        verification_link = f"http://127.0.0.1:8000{verification_url}"
+
+        # Check if template is found
+        from django.template.loader import get_template, TemplateDoesNotExist
+
+        try:
+            template = get_template('email_verification.html')
+            print("Template found")
+        except TemplateDoesNotExist:
+            print("Template not found")
+
+        html_content = render_to_string('email_verification.html', {'user': user, 'verification_link': verification_link})
+
+        email = EmailMultiAlternatives(
+            subject='Email Verification',
+            body=f'Please verify your email by clicking on the following link: {verification_link}',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email]
+        )
+        email.attach_alternative(html_content, "text/html")
+        email.send()
 
 class UserLoginAPIView(views.APIView):
     permission_classes = [AllowAny]  # Allow unregistered users to access this view
@@ -190,3 +222,20 @@ class AddressDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         obj = generics.get_object_or_404(queryset, **filter_kwargs)
         self.check_object_permissions(self.request, obj)
         return obj
+
+class VerifyEmail(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, uidb64, token):
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
+
+        if user is not None and email_verification_token.check_token(user, token):
+            user.is_active = True
+            user.save()
+            return Response({'message': 'Email verified successfully!'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Invalid token or user ID'}, status=status.HTTP_400_BAD_REQUEST)

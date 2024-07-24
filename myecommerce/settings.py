@@ -152,7 +152,7 @@ ROOT_URLCONF = 'myecommerce.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -165,7 +165,7 @@ TEMPLATES = [
         },
     },
 ]
-
+print("templates_base dir =", TEMPLATES)
 WSGI_APPLICATION = 'myecommerce.wsgi.application'
 
 SITE_ID = 1

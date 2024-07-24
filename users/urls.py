@@ -1,6 +1,6 @@
 # users/urls.py
 from django.urls import path, include
-from .api import UserRegisterAPIView, UserLoginAPIView, LogoutAPIView, UserProfileAPIView, CustomPasswordResetConfirmView, AddressListCreateAPIView, AddressDetailAPIView
+from .api import UserRegisterAPIView, UserLoginAPIView, LogoutAPIView, UserProfileAPIView, CustomPasswordResetConfirmView, AddressListCreateAPIView, AddressDetailAPIView, VerifyEmail
 
 urlpatterns = [
     path('register/', UserRegisterAPIView.as_view(), name='user-register'),
@@ -12,4 +12,6 @@ urlpatterns = [
     path('password_reset/', include('django_rest_passwordreset.urls', namespace='password_reset')),
     path('auth/', include('django.contrib.auth.urls')),
     path('password_reset/confirm/<uidb64>/<token>/', CustomPasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('email-verify/<uidb64>/<token>/', VerifyEmail.as_view(), name='email-verify'),  # Add this line
+
 ]

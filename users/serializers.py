@@ -3,6 +3,14 @@ from rest_framework import serializers
 from django.core.validators import RegexValidator, validate_email
 from rest_framework.validators import UniqueValidator
 from .models import Address
+from .tokens import email_verification_token
+from django.core.mail import send_mail
+from django.conf import settings
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.urls import reverse
+from django.template.loader import render_to_string
+from django.core.mail import EmailMultiAlternatives
 
 User = get_user_model()
 
@@ -68,3 +76,23 @@ class UserSerializer(serializers.ModelSerializer):
                     # Create new address
                     Address.objects.create(user=instance, **address_data)
         return instance
+
+
+    def send_verification_email(self, user):
+        token = email_verification_token.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        verification_url = reverse('email-verify', kwargs={'uidb64': uid, 'token': token})
+        # Construct absolute URL using request
+        verification_link = f"http://127.0.0.1:8000{verification_url}"
+
+        # Load HTML content
+        html_content = render_to_string('email_verification.html', {'user': user, 'verification_link': verification_link})
+
+        email = EmailMultiAlternatives(
+            subject='Email Verification',
+            body=f'Please verify your email by clicking on the following link: {verification_link}',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email]
+        )
+        email.attach_alternative(html_content, "text/html")
+        email.send()

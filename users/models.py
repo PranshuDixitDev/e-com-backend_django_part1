@@ -8,7 +8,8 @@ class CustomUser(AbstractUser):
     phone_validator = RegexValidator(regex=r'^\+91\d{10}$', message="Phone number must be entered in the format: '+919999999999'.")
     phone_number = models.CharField(validators=[phone_validator], max_length=14, unique=True)
     birthdate = models.DateField(null=True, blank=False)  # Optional for superuser
-
+    is_email_verified = models.BooleanField(default=False)
+    
     class Meta:
         verbose_name = 'user'
         verbose_name_plural = 'users'

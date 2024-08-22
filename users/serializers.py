@@ -37,12 +37,13 @@ class UserSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(validators=[validate_email, UniqueValidator(queryset=User.objects.all())])
     phone_number = serializers.CharField(validators=[RegexValidator(regex=r'^\+91\d{10}$'), UniqueValidator(queryset=User.objects.all())])
     addresses = AddressSerializer(many=True, required=False)  # Handle multiple addresses
+    is_email_verified = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
         fields = ['username', 'first_name', 'last_name',
                    'email', 'password', 'phone_number',
-                    'addresses', 'birthdate']
+                    'addresses', 'birthdate', 'is_email_verified']
         read_only_fields = ['email', 'phone_number']
         extra_kwargs = {
             'password': {'write_only': True},

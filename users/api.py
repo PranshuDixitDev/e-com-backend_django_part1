@@ -1,3 +1,4 @@
+import logging
 from django_ratelimit.decorators import ratelimit
 from django.contrib.auth import get_user_model, authenticate
 from django.db.models import Q
@@ -28,11 +29,10 @@ from django.urls import reverse
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.core.mail import EmailMultiAlternatives
-
+from functools import wraps
 
 # Custom decorator that bypasses ratelimiting for tests
 
-from functools import wraps
 
 def maybe_ratelimit(*args, **kwargs):
     def decorator(func):
@@ -48,12 +48,12 @@ def maybe_ratelimit(*args, **kwargs):
 
 User = get_user_model()
 
+
 class UserRegisterAPIView(views.APIView):
     permission_classes = [AllowAny]  # Allow unregistered users to access this view
 
     @method_decorator(maybe_ratelimit(key='ip', rate='5/m', method='POST'))
     def post(self, request):
-        print("Permissions from UserRegisterAPIView:", self.get_permissions())
         with transaction.atomic():
             serializer = UserSerializer(data=request.data)
             if serializer.is_valid():
@@ -113,6 +113,8 @@ class UserLoginAPIView(views.APIView):
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
             }, status=status.HTTP_200_OK)
+         # Log failed attempt with IP and timestamp
+        logging.warning(f"Failed login attempt for user {login} from IP {request.META['REMOTE_ADDR']} at {now()}")
         return Response({"error": "Invalid Credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
 

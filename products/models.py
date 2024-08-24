@@ -4,7 +4,7 @@ from taggit.managers import TaggableManager
 import re
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
-import os
+from decimal import Decimal
 
 
 def validate_image(image):
@@ -18,7 +18,7 @@ def validate_image(image):
 class PriceWeight(models.Model):
     """ Stores price and weight combinations for a product, ensures uniqueness per product. """
     product = models.ForeignKey('Product', related_name='price_weights', on_delete=models.CASCADE)
-    price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)], default=2000)
+    price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))], default=Decimal('2000.00'))
     weight = models.CharField(max_length=50, default='100gms')
 
     class Meta:

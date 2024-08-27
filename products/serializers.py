@@ -1,6 +1,6 @@
 # products/serializers.py
 from rest_framework import serializers
-from .models import Product, PriceWeight, Category
+from .models import Product, PriceWeight, Category, ProductImage
 from taggit.serializers import (TagListSerializerField, TaggitSerializer)
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -13,14 +13,28 @@ class PriceWeightComboSerializer(serializers.ModelSerializer):
         model = PriceWeight
         fields = ['price', 'weight']
 
+class ProductImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductImage
+        fields = ['image_url', 'description']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url
+
 class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
     tags = TagListSerializerField()
     price_weights = PriceWeightComboSerializer(many=True)
     category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
+    images = ProductImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
-        fields = ['id', 'name', 'category', 'inventory', 'tags', 'price_weights']  # Add 'id' to fields
+        fields = ['id', 'name', 'category', 'inventory', 'tags', 'price_weights', 'images']
         depth = 1
 
     def create(self, validated_data):

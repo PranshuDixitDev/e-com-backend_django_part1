@@ -14,6 +14,8 @@ from rest_framework.exceptions import ValidationError
 from django.db import transaction
 from rest_framework.decorators import action
 import time
+from django.contrib.postgres.search import SearchVector
+
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
@@ -79,3 +81,28 @@ class BulkUploadProductsView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(result, status=status.HTTP_201_CREATED)
+    
+
+class ProductSearchAPIView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            query = request.GET.get('q', '')  # Get the search query from the URL parameters
+
+            if query:
+                # Full-text search on name, tags, and description using SearchVector
+                products = Product.objects.annotate(
+                    search=SearchVector('name', 'tags__name', 'description')
+                ).filter(search=query).distinct()
+
+            else:
+                products = Product.objects.none()  # Return no products if the query is empty
+
+            serializer = ProductSerializer(products, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            # Catch any exception and print it to the console
+            print(f"Error: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

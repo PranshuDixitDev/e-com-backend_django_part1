@@ -711,35 +711,60 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
 ### Product POST Request Body :
   ```json
   {
-  "name": "[unique product name required]",
-  "description": "[product description required]",
-  "category_id": "[existing category ID required]",
-  "inventory": "[quantity in stock]",
-  "price_weights": "[formatted as price-weight pairs, e.g., 2000-100gms]",
-  "tags": "[optional, list of tags]",
-  "image_urls": "[optional, list of image URLs]"
-  }
+  "name": "Laptop",
+  "description": "High performance laptop",
+  "category_id": 2,
+  "inventory": 50,
+  "price_weights": [
+    {"price": "50000", "weight": "1kg"},
+    {"price": "75000", "weight": "1.5kg"},
+    {"price": "100000", "weight": "2kg"}
+  ],
+  "tags": ["Computing", "High-End"],
+  "image_urls": ["http://example.com/image2.jpg"]
+}
 
   ```
 
 ### Success Response for GET  (Code: 200 OK)
 
 ```json
-[
-  {
-    "id": 1,
-    "name": "Smartphone",
-    "description": "Latest model",
-    "category": {
-      "id": 1,
-      "name": "Electronics"
-    },
-    "inventory": 100,
-    "price_weights": "2000-100gms,3000-200gms,4000-300gms",
-    "tags": ["Electronics", "Gadgets"],
-    "image_urls": ["http://example.com/image1.jpg"]
-  }
-]
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "name": "prodtest1",
+            "category": 1,
+            "inventory": 11,
+            "tags": [
+                "spicy"
+            ],
+            "price_weights": [
+                {
+                    "price": "2100.00",
+                    "weight": "102gms"
+                },
+                {
+                    "price": "2200.00",
+                    "weight": "100gms"
+                },
+                {
+                    "price": "2002.00",
+                    "weight": "100gms"
+                }
+            ],
+            "images": [
+                {
+                    "image_url": "http://127.0.0.1:8000/media/products/1/bedroom.webp",
+                    "description": "photo"
+                }
+            ]
+        }
+    ]
+}
 
 ```
 
@@ -749,13 +774,13 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
 {
   "id": 2,
   "name": "Laptop",
-  "description": "High performance",
+  "description": "High performance laptop",
   "category": {
     "id": 2,
     "name": "Computing"
   },
   "inventory": 50,
-  "price_weights": "50000-1kg,75000-1.5kg,100000-2kg",
+  "price_weights": "50000-1kg, 75000-1.5kg, 100000-2kg",
   "tags": ["Computing", "High-End"],
   "image_urls": ["http://example.com/image2.jpg"]
 }
@@ -772,14 +797,14 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
 
 
 
-- **Product Detail, Update, and Delete**:
+- **Single Product Detail**:
 
   - **API Endpoint**:
-  - **Method**: `GET` FOR detail, `PUT/PATCH` for update, `DELETE` for delete
+  - **Method**: `GET` FOR detail
   - **URL**: `/api/products/{id}/`
   - **Authentication**: Yes
-  - **Permissions**: User must be authenticated; admin for `PUT/PATCH/DELETE`
-  
+  - **Permissions**: Public access for viewing
+  - **Description**: Retrieves details of a specific product by its ID.
 
 ### Success Response for GET (Code: 200 OK):
 
@@ -793,11 +818,21 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
     "name": "Electronics"
   },
   "inventory": 100,
-  "price_weights": "2000-100gms,3000-200gms,4000-300gms",
+  "price_weights": "2000-100gms, 3000-200gms, 4000-300gms",
   "tags": ["Electronics", "Gadgets"],
   "image_urls": ["http://example.com/image1.jpg"]
 }
 ```
+
+
+- **Update Product**:
+
+  - **API Endpoint**:
+  - **Method**: `PUT` OR `PATCH` 
+  - **URL**: `/api/products/{id}/`
+  - **Authentication**: Yes(Admin only)
+  - **Permissions**: Admin access required
+  - **Description**: Updates the details of a specific product by its ID.
 
 ### Product PUT Request Body:
 ```json
@@ -822,11 +857,11 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
 
 ### Product DELETE Operation:
 
-- **Description**: Deletes the product with the specified ID.
 - **URL**: `/api/products/{id}/`
 - **Method**: `DELETE`
-- **Auth Required**: Yes
-- **Permissions**: Admin
+- **Auth Required**: Yes(Admin only)
+- **Permissions**: Admin access required
+- **Description**: Deletes the product with the specified ID.
 
 
 ### Success Response for DELETE (Code: 204 NO CONTENT):
@@ -842,6 +877,56 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
 }
 ```
 
+### Product Search:
+
+- **URL**: `/api/products/search/?q=<query>`
+- **Method**: `GET`
+- **Auth Required**: No
+- **Permissions**: Public access
+- **Description**: Allows searching products by name, tags, or description.
+
+## Example Request:
+```json
+
+GET /api/products/search/?q=Smartphone
+
+```
+
+### Success Response for Search (Code: 200 OK):
+
+```json
+[
+    {
+        "id": 1,
+        "name": "prodtest1",
+        "category": 1,
+        "inventory": 11,
+        "tags": [
+            "spicy"
+        ],
+        "price_weights": [
+            {
+                "price": "2100.00",
+                "weight": "102gms"
+            },
+            {
+                "price": "2200.00",
+                "weight": "100gms"
+            },
+            {
+                "price": "2002.00",
+                "weight": "100gms"
+            }
+        ],
+        "images": [
+            {
+                "image_url": "/media/products/1/bedroom.webp",
+                "description": "photo"
+            }
+        ]
+    }
+]
+```
 
 ## Usage Example:
 

@@ -34,6 +34,7 @@ class Product(models.Model):
     category = models.ForeignKey(Category, related_name='products', on_delete=models.CASCADE)
     tags = TaggableManager()
     inventory = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    is_active = models.BooleanField(default=True, help_text="Uncheck this box to deactivate the product.")
 
     def __str__(self):
         return self.name

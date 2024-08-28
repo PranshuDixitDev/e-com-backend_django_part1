@@ -31,11 +31,19 @@ class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
     price_weights = PriceWeightComboSerializer(many=True)
     category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
     images = ProductImageSerializer(many=True, read_only=True)
+    is_active = serializers.BooleanField()
+    status = serializers.SerializerMethodField()
+
 
     class Meta:
         model = Product
-        fields = ['id', 'name', 'category', 'inventory', 'tags', 'price_weights', 'images']
+        fields = ['id', 'name', 'category', 'inventory', 'tags', 'price_weights', 'images', 'is_active', 'status']
         depth = 1
+
+    def get_status(self, obj):
+        if not obj.is_active:
+            return "Out of stock"
+        return "In stock" if obj.inventory > 0 else "Out of stock"
 
     def create(self, validated_data):
         price_weight_combos_data = validated_data.pop('price_weights')

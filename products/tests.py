@@ -38,7 +38,8 @@ class ProductModelTest(APITestCase):
         cls.product = Product.objects.create(
             name="Smartphone",
             description="Latest model",
-            category=cls.category
+            category=cls.category,
+            is_active=True
         )
         # Preparing URL for list and detail endpoints.
         cls.url_list = reverse('product-list')
@@ -78,7 +79,8 @@ class ProductModelTest(APITestCase):
                     "price": "4000.00",
                     "weight": "300gms"
                 }
-            ]
+            ],
+            "is_active": True
         }
 
         response = self.client.post(self.url_list, data, format='json')
@@ -152,173 +154,6 @@ class ProductModelTest(APITestCase):
     def test_image_upload(self):
         # Placeholder for testing image uploads. Implement if applicable.
         pass
-
-
-# class BulkUploadProductsTest(APITestCase):
-#     @classmethod
-#     def setUpTestData(cls):
-#         # Setup data that is used across multiple test methods.
-#         cls.category = Category.objects.create(category_id="001", name="Electronics", description="Electronic items")
-#         cls.admin = User.objects.create_superuser(
-#             username='admin',
-#             password='adminpass',
-#             phone_number='+0987654321'
-#         )
-#         cls.url_bulk_upload = reverse('bulk-upload-products')
-
-#     def get_tokens_for_user(self, user):
-#         # Helper method to generate JWT tokens for users.
-#         refresh = RefreshToken.for_user(user)
-#         return str(refresh.access_token)
-
-#     def test_bulk_upload_products_by_admin(self):
-#         # Test that an admin user can bulk upload products.
-#         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(self.admin))
-        
-#         # Create a CSV file in memory
-#         csv_file = io.StringIO()
-#         writer = csv.writer(csv_file)
-#         writer.writerow(['name', 'description', 'category_id', 'inventory', 'price_weights'])
-#         writer.writerow(['Smartphone', 'Latest model', '001', '50', '2000-100gms,3000-200gms,4000-300gms'])
-#         writer.writerow(['Tablet', 'Portable device', '001', '30', '2000-100gms,3000-200gms,4000-300gms'])
-#         csv_file.seek(0)
-        
-#         upload_file = SimpleUploadedFile("products.csv", csv_file.getvalue().encode())
-        
-#         response = self.client.post(self.url_bulk_upload, {'file': upload_file}, format='multipart')
-#         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-#         self.assertEqual(Product.objects.count(), 2)
-
-#     def test_bulk_upload_with_invalid_category(self):
-#         # Test that bulk upload fails with an invalid category.
-#         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(self.admin))
-        
-#         # Create a CSV file in memory
-#         csv_file = io.StringIO()
-#         writer = csv.writer(csv_file)
-#         writer.writerow(['name', 'description', 'category_id', 'inventory', 'price_weights'])
-#         writer.writerow(['Smartphone', 'Latest model', '999', '50', '2000-100gms,3000-200gms,4000-300gms'])  # Invalid category_id
-#         csv_file.seek(0)
-        
-#         upload_file = SimpleUploadedFile("products.csv", csv_file.getvalue().encode())
-        
-#         response = self.client.post(self.url_bulk_upload, {'file': upload_file}, format='multipart')
-#         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-#         self.assertIn("Category with ID 999 does not exist.", response.data['error'])
-
-#     def test_bulk_upload_with_duplicate_product_name(self):
-#         # Test that bulk upload fails if a product with the same name already exists.
-#         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(self.admin))
-        
-#         # Create an existing product
-#         Product.objects.create(
-#             name="Smartphone",
-#             description="Latest model",
-#             category=self.category,
-#             inventory=50
-#         )
-        
-#         # Create a CSV file in memory
-#         csv_file = io.StringIO()
-#         writer = csv.writer(csv_file)
-#         writer.writerow(['name', 'description', 'category_id', 'inventory', 'price_weights'])
-#         writer.writerow(['Smartphone', 'Latest model', '001', '50', '2000-100gms,3000-200gms,4000-300gms'])  # Duplicate product name
-#         csv_file.seek(0)
-        
-#         upload_file = SimpleUploadedFile("products.csv", csv_file.getvalue().encode())
-        
-#         response = self.client.post(self.url_bulk_upload, {'file': upload_file}, format='multipart')
-#         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-#         self.assertIn("Product with name Smartphone already exists.", response.data['error'])
-
-#     def test_bulk_upload_by_non_admin(self):
-#         # Test that non-admin users cannot bulk upload products.
-#         user = User.objects.create_user(
-#             username='user', 
-#             password='pass',
-#             phone_number='+1234567890'
-#         )
-#         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(user))
-        
-#         # Create a CSV file in memory
-#         csv_file = io.StringIO()
-#         writer = csv.writer(csv_file)
-#         writer.writerow(['name', 'description', 'category_id', 'inventory', 'price_weights'])
-#         writer.writerow(['Smartphone', 'Latest model', '001', '50', '2000-100gms,3000-200gms,4000-300gms'])
-#         csv_file.seek(0)
-        
-#         upload_file = SimpleUploadedFile("products.csv", csv_file.getvalue().encode())
-        
-#         response = self.client.post(self.url_bulk_upload, {'file': upload_file}, format='multipart')
-#         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-# # Excel bulk upload:
-
-#     def test_bulk_upload_products_by_admin_with_excel(self):
-#         # Test that an admin user can bulk upload products using an Excel file.
-#         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(self.admin))
-
-#         # Create a DataFrame
-#         data = pd.DataFrame({
-#             'name': ['Smartphone', 'Tablet'],
-#             'description': ['Latest model', 'Portable device'],
-#             'category_id': ['001', '001'],
-#             'inventory': [50, 30],
-#             'price_weights': ['2000-100gms,3000-200gms,4000-300gms', '1000-50gms,1500-75gms,2500-125gms']
-#         })
-
-#         # Save DataFrame to an Excel file in memory
-#         excel_file = BytesIO()
-#         with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
-#             data.to_excel(writer, index=False)
-#             writer.close()  # Correct method to finalize and save the file
-
-#         excel_file.seek(0)
-
-#         # Create an InMemoryUploadedFile
-#         upload_file = InMemoryUploadedFile(
-#             excel_file, None, "products.xlsx", 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-#             excel_file.getbuffer().nbytes, None
-#         )
-
-#         # Upload the file
-#         response = self.client.post(self.url_bulk_upload, {'file': upload_file}, format='multipart')
-#         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-#         self.assertEqual(Product.objects.count(), 2)  # Assuming you're checking the total number of products after the upload
-
-#     def test_bulk_upload_empty_file(self):
-#         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(self.admin))
-        
-#         empty_csv = io.StringIO()  # create an empty CSV file
-#         writer = csv.writer(empty_csv)
-#         writer.writerow(['name', 'description', 'category_id', 'inventory', 'price_weights'])  # only headers
-#         empty_csv.seek(0)
-        
-#         upload_file = SimpleUploadedFile("empty.csv", empty_csv.getvalue().encode())
-        
-#         response = self.client.post(self.url_bulk_upload, {'file': upload_file}, format='multipart')
-#         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-#         self.assertIn("No data found in file.", response.data['error'])
-
-#     def test_bulk_upload_integration(self):
-#         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(self.admin))
-        
-#         csv_file = io.StringIO()
-       
-#         writer = csv.writer(csv_file)
-#         writer.writerow(['name', 'description', 'category_id', 'inventory', 'price_weights'])
-#         writer.writerow(['NewProduct', 'A new product', '001', '100', '500-50gms,700-75gms,900-100gms'])
-#         csv_file.seek(0)
-        
-#         upload_file = SimpleUploadedFile("integration.csv", csv_file.getvalue().encode())
-#         response = self.client.post(self.url_bulk_upload, {'file': upload_file}, format='multipart')
-#         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-#         self.assertEqual(Product.objects.filter(name='NewProduct').count(), 1)
-       
-#         new_product = Product.objects.get(name='NewProduct')
-#         self.assertEqual(new_product.inventory, 100)
-#         self.assertTrue(PriceWeight.objects.filter(product=new_product).count() > 0)
-
 
 class ProductInventoryAdjustmentTests(APITestCase):
     @classmethod
@@ -408,7 +243,8 @@ class ProductInventoryAdjustmentTests(APITestCase):
                     "price": "4000.00",
                     "weight": "300gms"
                 }
-            ]
+            ],
+            "is_active": True
         }
 
         response = self.client.post(self.url_list, data, format='json')
@@ -449,7 +285,8 @@ class ProductInventoryAdjustmentTests(APITestCase):
                     "price": "4000.00",
                     "weight": "300gms"
                 }
-            ]
+            ],
+            "is_active": True
         }
 
         response = self.client.post(self.url_list, product_data, format='json')
@@ -519,4 +356,47 @@ class ProductCreationEdgeCaseTests(APITestCase):
         response = self.client.post(self.url_list, product_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('price', response.data['price_weights'][0])  # Adjusting to the correct nesting
+
+class ProductModelTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.category = Category.objects.create(name="Electronics")
+        
+    def test_deactivate_product(self):
+        product = Product.objects.create(
+            name="Test Product",
+            description="Test Description",
+            category=self.category,
+            inventory=10,
+            is_active=True
+        )
+        product.is_active = False
+        product.save()
+        product.refresh_from_db()
+        self.assertFalse(product.is_active)
+
+    def test_product_visibility_when_inactive(self):
+        product = Product.objects.create(
+            name="Invisible Product",
+            description="This should be invisible",
+            category=self.category,
+            inventory=10,
+            is_active=False
+        )
+        response = self.client.get(reverse('product-list'))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn(product.name, response.content.decode())
+
+    def test_out_of_stock_message_for_inactive_product(self):
+        product = Product.objects.create(
+            name="Inactive Product",
+            description="Out of stock should be shown",
+            category=self.category,
+            inventory=10,
+            is_active=False
+        )
+
+        # Fetch product details and check that it returns 404
+        response = self.client.get(reverse('product-detail', kwargs={'pk': product.id}))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 

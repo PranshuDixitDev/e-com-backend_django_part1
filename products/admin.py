@@ -40,9 +40,9 @@ class ProductImageInline(admin.TabularInline):
 
 # Main Product admin
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'description', 'category', 'get_tags']
+    list_display = ['name', 'description', 'category', 'get_tags', 'is_active']
     search_fields = ['name', 'description']
-    list_filter = ['category']
+    list_filter = ['category', 'is_active']
     inlines = [PriceWeightInline, ProductImageInline]
 
     # Custom method to display tags in the admin list view

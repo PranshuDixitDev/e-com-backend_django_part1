@@ -721,10 +721,32 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
     {"price": "100000", "weight": "2kg"}
   ],
   "tags": ["Computing", "High-End"],
-  "image_urls": ["http://example.com/image2.jpg"]
+  "image_urls": ["http://example.com/image2.jpg"],
+  "is_active": true
 }
 
   ```
+
+### Success Response for POST  (Code: 201 CREATED):
+
+```json
+{
+  "id": 2,
+  "name": "Laptop",
+  "description": "High performance laptop",
+  "category": {
+    "id": 2,
+    "name": "Computing"
+  },
+  "inventory": 50,
+  "price_weights": "50000-1kg, 75000-1.5kg, 100000-2kg",
+  "tags": ["Computing", "High-End"],
+  "image_urls": ["http://example.com/image2.jpg"],
+  "is_active": true
+}
+
+
+```
 
 ### Success Response for GET  (Code: 200 OK)
 
@@ -761,32 +783,15 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
                     "image_url": "http://127.0.0.1:8000/media/products/1/bedroom.webp",
                     "description": "photo"
                 }
-            ]
+            ],
+            "is_active": true
         }
     ]
 }
 
 ```
 
-### Success Response for POST  (Code: 201 CREATED):
 
-```json
-{
-  "id": 2,
-  "name": "Laptop",
-  "description": "High performance laptop",
-  "category": {
-    "id": 2,
-    "name": "Computing"
-  },
-  "inventory": 50,
-  "price_weights": "50000-1kg, 75000-1.5kg, 100000-2kg",
-  "tags": ["Computing", "High-End"],
-  "image_urls": ["http://example.com/image2.jpg"]
-}
-
-
-```
 ### Error Response (Code: 400 Bad Request)
 
 ```json
@@ -823,7 +828,14 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
   "image_urls": ["http://example.com/image1.jpg"]
 }
 ```
+### Error Response (404 NOT FOUND)
 
+```json
+{
+  "error": "Product not found or inactive."
+}
+
+```
 
 - **Update Product**:
 
@@ -843,7 +855,8 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
   "inventory": 150,
   "price_weights": "2500-100gms,3500-200gms",
   "tags": ["Updated", "Tags"],
-  "image_urls": ["http://example.com/updated_image.jpg"]
+  "image_urls": ["http://example.com/updated_image.jpg"],
+  "is_active": false
 }
 ```
 
@@ -923,7 +936,8 @@ GET /api/products/search/?q=Smartphone
                 "image_url": "/media/products/1/bedroom.webp",
                 "description": "photo"
             }
-        ]
+        ],
+        "is_active": true
     }
 ]
 ```

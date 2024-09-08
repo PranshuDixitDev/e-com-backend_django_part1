@@ -890,58 +890,392 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
 }
 ```
 
-### Product Search:
+## Unified Search API
 
-- **URL**: `/api/products/search/?q=<query>`
+- **URL**: `/api/search/`
 - **Method**: `GET`
-- **Auth Required**: No
-- **Permissions**: Public access
-- **Description**: Allows searching products by name, tags, or description.
+- **Authentication Required**: No (for search), Yes (to view specific details if required by internal rules)
+- **Query Parameters**:
+  - **q**: The query string to search for in products and categories.
+  - **type**: Optional. Specify 'product' to search only products, 'category' to search only categories, or leave blank to search both.
 
-## Example Request:
+### Fuzzy Search Suggestions:
+-**Code: 200 OK**:
+
+  ```json
+  {
+    "detail": "No exact match found, did you mean:",
+    "product_suggestions": ["prodtest1", "prodtest3"],
+    "category_suggestions": ["cattest1", "cattest3"]
+  }
+  ```
+
+### Error Response (Code: 404 NOT FOUND):
+  ```json
+  {
+    "detail": "No matches found."
+  }
+  ```
+
+### Example 1: Search for a random thing see if its available or anything close to it :
+
+  ```bash
+    GET http://127.0.0.1:8000/api/search/?q=test
+  ```
+
+### Success Response (Code: 200 OK):
 ```json
-
-GET /api/products/search/?q=Smartphone
+{
+    "products": [
+        {
+            "id": 1,
+            "name": "prodtest1",
+            "category": 1,
+            "inventory": 11,
+            "tags": [
+                "spicy"
+            ],
+            "price_weights": [
+                {
+                    "price": "2100.00",
+                    "weight": "102gms"
+                },
+                {
+                    "price": "2200.00",
+                    "weight": "100gms"
+                },
+                {
+                    "price": "2002.00",
+                    "weight": "100gms"
+                }
+            ],
+            "images": [
+                {
+                    "image_url": "/media/products/1/bedroom.webp",
+                    "description": "photo"
+                }
+            ],
+            "is_active": true,
+            "status": "In stock"
+        },
+        {
+            "id": 2,
+            "name": "prodtest2",
+            "category": 2,
+            "inventory": 20,
+            "tags": [
+                "test2",
+                "prod2"
+            ],
+            "price_weights": [
+                {
+                    "price": "20999.99",
+                    "weight": "100gms"
+                },
+                {
+                    "price": "2000.01",
+                    "weight": "100gms"
+                },
+                {
+                    "price": "2000.02",
+                    "weight": "100gms"
+                }
+            ],
+            "images": [
+                {
+                    "image_url": "/media/products/2/bg-fur.webp",
+                    "description": "prod22"
+                }
+            ],
+            "is_active": true,
+            "status": "In stock"
+        },
+        {
+            "id": 3,
+            "name": "prodtest3",
+            "category": 2,
+            "inventory": 20,
+            "tags": [
+                "test2",
+                "prod2",
+                "pt2"
+            ],
+            "price_weights": [
+                {
+                    "price": "2000.02",
+                    "weight": "100gms"
+                },
+                {
+                    "price": "1999.99",
+                    "weight": "100gms"
+                },
+                {
+                    "price": "1999.98",
+                    "weight": "100gms"
+                }
+            ],
+            "images": [
+                {
+                    "image_url": "/media/products/3/bedroom.webp",
+                    "description": "prod221"
+                }
+            ],
+            "is_active": true,
+            "status": "In stock"
+        }
+    ],
+    "categories": [
+        {
+            "category_id": "1",
+            "name": "Cat1test",
+            "description": "this is is a test",
+            "tags": [
+                "spices"
+            ],
+            "image": "/media/category_images/bedroom_aJWpeWz.webp",
+            "products": [
+                {
+                    "id": 1,
+                    "name": "prodtest1",
+                    "category": 1,
+                    "inventory": 11,
+                    "tags": [
+                        "spicy"
+                    ],
+                    "price_weights": [
+                        {
+                            "price": "2100.00",
+                            "weight": "102gms"
+                        },
+                        {
+                            "price": "2200.00",
+                            "weight": "100gms"
+                        },
+                        {
+                            "price": "2002.00",
+                            "weight": "100gms"
+                        }
+                    ],
+                    "images": [
+                        {
+                            "image_url": "/media/products/1/bedroom.webp",
+                            "description": "photo"
+                        }
+                    ],
+                    "is_active": true,
+                    "status": "In stock"
+                }
+            ]
+        },
+        {
+            "category_id": "catid2",
+            "name": "cattest2",
+            "description": "testing cat_2",
+            "tags": [
+                "test2"
+            ],
+            "image": "/media/category_images/decorative.webp",
+            "products": [
+                {
+                    "id": 2,
+                    "name": "prodtest2",
+                    "category": 2,
+                    "inventory": 20,
+                    "tags": [
+                        "test2",
+                        "prod2"
+                    ],
+                    "price_weights": [
+                        {
+                            "price": "20999.99",
+                            "weight": "100gms"
+                        },
+                        {
+                            "price": "2000.01",
+                            "weight": "100gms"
+                        },
+                        {
+                            "price": "2000.02",
+                            "weight": "100gms"
+                        }
+                    ],
+                    "images": [
+                        {
+                            "image_url": "/media/products/2/bg-fur.webp",
+                            "description": "prod22"
+                        }
+                    ],
+                    "is_active": true,
+                    "status": "In stock"
+                },
+                {
+                    "id": 3,
+                    "name": "prodtest3",
+                    "category": 2,
+                    "inventory": 20,
+                    "tags": [
+                        "test2",
+                        "prod2",
+                        "pt2"
+                    ],
+                    "price_weights": [
+                        {
+                            "price": "2000.02",
+                            "weight": "100gms"
+                        },
+                        {
+                            "price": "1999.99",
+                            "weight": "100gms"
+                        },
+                        {
+                            "price": "1999.98",
+                            "weight": "100gms"
+                        }
+                    ],
+                    "images": [
+                        {
+                            "image_url": "/media/products/3/bedroom.webp",
+                            "description": "prod221"
+                        }
+                    ],
+                    "is_active": true,
+                    "status": "In stock"
+                }
+            ]
+        }
+    ]
+}
 
 ```
 
-### Success Response for Search (Code: 200 OK):
-
+### Error Response (Code: 404 NOT FOUND):
 ```json
-[
+{
+  "error": "Product not found."
+}
+```
+
+
+### Example 2: Search for a Specific Product
+- **Request**: `GET /api/search/?q=prodtest2`
+- **Response** (200 OK):
+  ```json
     {
-        "id": 1,
-        "name": "prodtest1",
-        "category": 1,
-        "inventory": 11,
-        "tags": [
-            "spicy"
-        ],
-        "price_weights": [
+      "products": [
+        {
+          "id": 2,
+          "name": "prodtest2",
+          "category": 2,
+          "inventory": 20,
+          "tags": ["test2", "prod2"],
+          "price_weights": [
+            {"price": "20999.99", "weight": "100gms"},
+            {"price": "2000.01", "weight": "100gms"},
+            {"price": "2000.02", "weight": "100gms"}
+          ],
+          "images": [
             {
-                "price": "2100.00",
-                "weight": "102gms"
-            },
-            {
-                "price": "2200.00",
-                "weight": "100gms"
-            },
-            {
-                "price": "2002.00",
-                "weight": "100gms"
+              "image_url": "/media/products/2/bg-fur.webp",
+              "description": "prod22"
             }
-        ],
-        "images": [
-            {
-                "image_url": "/media/products/1/bedroom.webp",
-                "description": "photo"
-            }
-        ],
-        "is_active": true
+          ],
+          "is_active": true,
+          "status": "In stock"
+        }
+      ],
+      "categories": []
     }
-]
-```
+  ```
 
+
+### Example 3: Search for categories related to a query exact name
+
+- **Request**: `http://127.0.0.1:8000/api/search/?q=cattest2`
+- **Response** (200 OK):
+  ```json
+    {
+      "products": [],
+        "categories": [
+            {
+                "category_id": "catid2",
+                "name": "cattest2",
+                "description": "testing cat_2",
+                "tags": [
+                    "test2"
+                ],
+                "image": "/media/category_images/decorative.webp",
+                "products": [
+                    {
+                        "id": 2,
+                        "name": "prodtest2",
+                        "category": 2,
+                        "inventory": 20,
+                        "tags": [
+                            "test2",
+                            "prod2"
+                        ],
+                        "price_weights": [
+                            {
+                                "price": "20999.99",
+                                "weight": "100gms"
+                            },
+                            {
+                                "price": "2000.01",
+                                "weight": "100gms"
+                            },
+                            {
+                                "price": "2000.02",
+                                "weight": "100gms"
+                            }
+                        ],
+                        "images": [
+                            {
+                                "image_url": "/media/products/2/bg-fur.webp",
+                                "description": "prod22"
+                            }
+                        ],
+                        "is_active": true,
+                        "status": "In stock"
+                    },
+                    {
+                        "id": 3,
+                        "name": "prodtest3",
+                        "category": 2,
+                        "inventory": 20,
+                        "tags": [
+                            "test2",
+                            "prod2",
+                            "pt2"
+                        ],
+                        "price_weights": [
+                            {
+                                "price": "2000.02",
+                                "weight": "100gms"
+                            },
+                            {
+                                "price": "1999.99",
+                                "weight": "100gms"
+                            },
+                            {
+                                "price": "1999.98",
+                                "weight": "100gms"
+                            }
+                        ],
+                        "images": [
+                            {
+                                "image_url": "/media/products/3/bedroom.webp",
+                                "description": "prod221"
+                            }
+                        ],
+                        "is_active": true,
+                        "status": "In stock"
+                    }
+                ]
+            }
+        ]
+    }
+  ``` 
+  
 ## Usage Example:
 
 -**To manage products, users will**:

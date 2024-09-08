@@ -1,4 +1,6 @@
 # products/api.py
+import difflib
+from venv import logger
 from rest_framework import viewsets
 from .models import Product
 from .serializers import ProductSerializer
@@ -15,6 +17,7 @@ from django.db import transaction
 from rest_framework.decorators import action
 import time
 from django.contrib.postgres.search import SearchVector
+import logging
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -83,26 +86,52 @@ class BulkUploadProductsView(APIView):
         return Response(result, status=status.HTTP_201_CREATED)
     
 
-class ProductSearchAPIView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+# class ProductSearchAPIView(APIView):
+#     permission_classes = [IsAuthenticatedOrReadOnly]
 
-    def get(self, request, *args, **kwargs):
-        try:
-            query = request.GET.get('q', '')  # Get the search query from the URL parameters
+#     def get(self, request, *args, **kwargs):
+#         logger.debug("Received query: %s", request.GET.get('q', '').strip())
 
-            if query:
-                # Full-text search on name, tags, and description using SearchVector
-                products = Product.objects.annotate(
-                    search=SearchVector('name', 'tags__name', 'description')
-                ).filter(search=query).distinct()
+#         try:
+#             query = request.GET.get('q', '').strip()  # Get the search query and remove extra spaces
 
-            else:
-                products = Product.objects.none()  # Return no products if the query is empty
+#             if query:
+#                 # Perform partial matches on product name, tags, and description
+#                 products = Product.objects.filter(
+#                     name__icontains=query
+#                 ) | Product.objects.filter(
+#                     tags__name__icontains=query
+#                 ) | Product.objects.filter(
+#                     description__icontains=query
+#                 )
 
-            serializer = ProductSerializer(products, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+#                 products = products.distinct('id')  # Ensure no duplicate results
 
-        except Exception as e:
-            # Catch any exception and print it to the console
-            print(f"Error: {e}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#                 # If exact match or partial match, return those products
+#                 if products.exists():
+#                     serializer = ProductSerializer(products, many=True)
+#                     return Response(serializer.data, status=status.HTTP_200_OK)
+
+#                 # If no exact match, provide fuzzy matching suggestions
+#                 product_names = list(Product.objects.values_list('name', flat=True))
+#                 closest_matches = difflib.get_close_matches(query, product_names, n=3, cutoff=0.6)
+
+#                 if closest_matches:
+#                     # Return 200 OK with fuzzy match suggestions
+#                     return Response({
+#                         "detail": f"No exact match for '{query}', Did you mean:",
+#                         "suggestions": closest_matches
+#                     }, status=status.HTTP_200_OK)
+
+#                 # If no products and no suggestions, return 404
+#                 return Response({
+#                     "detail": f"No Product matches '{query}' and no suggestions available."
+#                 }, status=status.HTTP_404_NOT_FOUND)
+
+#             else:
+#                 return Response({"error": "Search query not provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+#         except Exception as e:
+#             # Log the error for debugging purposes
+#             print(f"Error: {e}")
+#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

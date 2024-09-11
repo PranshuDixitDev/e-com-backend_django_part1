@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     'django.contrib.sites',
     'social_django',
     'corsheaders',
+    'whitenoise.runserver_nostatic',
 ]
 
 
@@ -127,6 +128,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'csp.middleware.CSPMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 CSP_DEFAULT_SRC = ("'none'",)

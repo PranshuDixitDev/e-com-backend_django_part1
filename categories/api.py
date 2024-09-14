@@ -21,7 +21,7 @@ class CategoryList(generics.ListCreateAPIView):
 class CategoryDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    lookup_field = 'category_id'
+    lookup_field = 'id'
     # Define default permissions statically
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 

@@ -8,7 +8,7 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ['category_id', 'name', 'description', 'tags', 'image', 'secondary_image', 'secondary_description', 'products']  # Include 'products' in fields
+        fields = ['id', 'name', 'description', 'tags', 'image', 'secondary_image', 'secondary_description', 'products']  # Include 'products' in fields
 
     def get_tags(self, obj):
         # Return a list of tag names

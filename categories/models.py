@@ -17,7 +17,6 @@ def get_placeholder_image():
     return '/Users/pranshudixit/Downloads/bedroom.webp'
 
 class Category(models.Model):
-    category_id = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=100)
     description = models.TextField()
     secondary_description = models.TextField(blank=True, null=True)

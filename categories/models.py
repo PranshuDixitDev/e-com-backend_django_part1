@@ -20,8 +20,10 @@ class Category(models.Model):
     category_id = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=100)
     description = models.TextField()
+    secondary_description = models.TextField(blank=True, null=True)
     tags = TaggableManager()
     image = models.ImageField(upload_to='category_images/', validators=[validate_image], default=get_placeholder_image)
+    secondary_image = models.ImageField(upload_to='category_images/', validators=[validate_image], blank=True, null=True, default=get_placeholder_image)
     tags = TaggableManager() 
 
 

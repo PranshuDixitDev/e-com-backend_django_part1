@@ -47,12 +47,12 @@ class UnifiedSearchAPIView(APIView):
         if not products and not categories:
             if product_suggestions or category_suggestions:
                 return Response({
-                    "detail": "No exact match found, did you mean:",
+                    "message": "No exact match found, did you mean:",
                     "product_suggestions": product_suggestions,
                     "category_suggestions": category_suggestions
                 }, status=status.HTTP_200_OK)
 
-            return Response({"detail": "No matches found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "No matches found."}, status=status.HTTP_404_NOT_FOUND)
 
         # If exact matches exist but you still want to show fuzzy suggestions
         return Response({

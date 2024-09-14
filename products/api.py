@@ -18,14 +18,20 @@ from rest_framework.decorators import action
 import time
 from django.contrib.postgres.search import SearchVector
 import logging
+from rest_framework.pagination import PageNumberPagination
+from categories.models import Category
+
+
+class ProductPagination(PageNumberPagination):
+    page_size = 10 
 
 
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.filter(is_active=True)
+    queryset = Product.objects.filter(is_active=True).select_related('category').prefetch_related('tags', 'images')
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [UserRateThrottle, AnonRateThrottle]
-
+    pagination_class = ProductPagination
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -71,6 +77,22 @@ class ProductViewSet(viewsets.ModelViewSet):
             return Response({"error": "Inventory must be a valid integer."}, status=status.HTTP_400_BAD_REQUEST)
         except Product.DoesNotExist:
             return Response({"error": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error adjusting inventory: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+    @action(detail=False, methods=['get'], url_path='by-category/(?P<category_id>[^/.]+)')
+    def get_products_by_category(self, request, category_id=None):
+        try:
+            # Get category by ID
+            category = Category.objects.get(pk=category_id)
+            # Filter products by category
+            products = Product.objects.filter(category=category, is_active=True)
+            serializer = ProductSerializer(products, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Category.DoesNotExist:
+            return Response({"error": "Category not found."}, status=status.HTTP_404_NOT_FOUND)
 
 class BulkUploadProductsView(APIView):
     parser_classes = [MultiPartParser, FormParser]

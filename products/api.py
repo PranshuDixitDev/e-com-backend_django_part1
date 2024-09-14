@@ -34,7 +34,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     pagination_class = ProductPagination
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'get_products_by_category']:
             permission_classes = [IsAuthenticatedOrReadOnly]
         elif self.action == 'create':
             permission_classes = [IsAdminUser]
@@ -82,7 +82,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
-    @action(detail=False, methods=['get'], url_path='by-category/(?P<category_id>[^/.]+)')
+    @action(detail=False, methods=['get'], url_path='by-category/(?P<category_id>[^/.]+)', permission_classes=[IsAuthenticatedOrReadOnly])
     def get_products_by_category(self, request, category_id=None):
         try:
             # Get category by ID

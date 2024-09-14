@@ -6,6 +6,7 @@ from products.models import Product
 from categories.models import Category
 from products.serializers import ProductSerializer
 from categories.serializers import CategorySerializer
+from django.db.models import Q
 
 class UnifiedSearchAPIView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -15,21 +16,35 @@ class UnifiedSearchAPIView(APIView):
         if not query:
             return Response({"error": "Search query not provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Search in Products
-        products = Product.objects.filter(name__icontains=query).distinct()
+        # Search for products matching name, description, or tags
+        products = Product.objects.filter(
+            Q(name__icontains=query) | Q(tags__name__icontains=query) | Q(description__icontains=query)
+        ).distinct()
         product_data = ProductSerializer(products, many=True).data
 
-        # Search in Categories
-        categories = Category.objects.filter(name__icontains=query).distinct()
+        # Search for categories based on the query
+        categories = Category.objects.filter(
+            Q(name__icontains=query) | Q(description__icontains=query)
+        ).distinct()
         category_data = CategorySerializer(categories, many=True).data
 
-        # Fuzzy Matching if no direct results
-        if not products and not categories:
-            all_product_names = list(Product.objects.values_list('name', flat=True))
-            all_category_names = list(Category.objects.values_list('name', flat=True))
-            product_suggestions = difflib.get_close_matches(query, all_product_names, n=3, cutoff=0.6)
-            category_suggestions = difflib.get_close_matches(query, all_category_names, n=3, cutoff=0.6)
+        # For each category, calculate the product count based on the query
+        for category in category_data:
+            product_count = Product.objects.filter(
+                Q(name__icontains=query) | Q(tags__name__icontains=query) | Q(description__icontains=query),
+                category__category_id=category['category_id']
+            ).count()
+            category['product_count'] = product_count
+            category['products'] = []  # Ensure no products are returned inside categories
 
+        # Generate fuzzy suggestions if no exact matches
+        all_product_names = list(Product.objects.values_list('name', flat=True))
+        all_category_names = list(Category.objects.values_list('name', flat=True))
+        product_suggestions = difflib.get_close_matches(query, all_product_names, n=3, cutoff=0.6)
+        category_suggestions = difflib.get_close_matches(query, all_category_names, n=3, cutoff=0.6)
+
+        # If there are no exact matches, return only suggestions
+        if not products and not categories:
             if product_suggestions or category_suggestions:
                 return Response({
                     "detail": "No exact match found, did you mean:",
@@ -39,7 +54,10 @@ class UnifiedSearchAPIView(APIView):
 
             return Response({"detail": "No matches found."}, status=status.HTTP_404_NOT_FOUND)
 
+        # If exact matches exist but you still want to show fuzzy suggestions
         return Response({
             "products": product_data,
-            "categories": category_data
+            "categories": category_data,
+            "product_suggestions": product_suggestions,  # Add product suggestions here
+            "category_suggestions": category_suggestions  # Add category suggestions here
         }, status=status.HTTP_200_OK)

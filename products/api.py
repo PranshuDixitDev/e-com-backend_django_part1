@@ -2,7 +2,7 @@
 import difflib
 from venv import logger
 from rest_framework import viewsets
-from .models import Product
+from .models import Product, BestSeller
 from .serializers import ProductSerializer
 from rest_framework.permissions import IsAdminUser, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework import permissions, viewsets
@@ -115,7 +115,14 @@ class BulkUploadProductsView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(result, status=status.HTTP_201_CREATED)
-    
+
+
+class BestSellerList(APIView):
+    def get(self, request):
+        best_sellers = BestSeller.objects.all()
+        products = [best_seller.product for best_seller in best_sellers]
+        serializer = ProductSerializer(products, many=True)
+        return Response(serializer.data)
 
 # class ProductSearchAPIView(APIView):
 #     permission_classes = [IsAuthenticatedOrReadOnly]

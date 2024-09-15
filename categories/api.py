@@ -8,6 +8,7 @@ class CategoryList(generics.ListCreateAPIView):
     serializer_class = CategorySerializer
     # Define default permissions statically
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    pagination_class = None
 
     def get_permissions(self):
         """

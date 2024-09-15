@@ -4,20 +4,16 @@ from products.serializers import ProductSerializer
 
 class CategorySerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
-    products = serializers.SerializerMethodField()  # This line includes associated products
+    
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'description', 'tags', 'image', 'secondary_image', 'secondary_description', 'products']  # Include 'products' in fields
+        fields = ['id', 'name', 'description', 'tags', 'image', 'secondary_image', 'secondary_description'] 
 
     def get_tags(self, obj):
         # Return a list of tag names
         return list(obj.tags.names())
 
-    def get_products(self, obj):
-        # You can optimize this query by adjusting your viewset to prefetch related products
-        products = obj.products.all().filter(is_active=True)
-        return ProductSerializer(products, many=True).data  # Serialize the products
 
     def validate_name(self, value):
         if any(char.isdigit() for char in value):

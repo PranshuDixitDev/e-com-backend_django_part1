@@ -23,7 +23,6 @@ class Category(models.Model):
     tags = TaggableManager()
     image = models.ImageField(upload_to='category_images/', validators=[validate_image], default=get_placeholder_image)
     secondary_image = models.ImageField(upload_to='category_images/', validators=[validate_image], blank=True, null=True, default=get_placeholder_image)
-    tags = TaggableManager() 
 
 
     def __str__(self):

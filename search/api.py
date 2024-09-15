@@ -32,7 +32,7 @@ class UnifiedSearchAPIView(APIView):
         for category in category_data:
             product_count = Product.objects.filter(
                 Q(name__icontains=query) | Q(tags__name__icontains=query) | Q(description__icontains=query),
-                category__category_id=category['category_id']
+                category__id=category['id']
             ).count()
             category['product_count'] = product_count
             category['products'] = []  # Ensure no products are returned inside categories

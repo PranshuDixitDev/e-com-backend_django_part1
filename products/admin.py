@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Product, ProductImage, PriceWeight, validate_image
+from .models import BestSeller, Product, ProductImage, PriceWeight, validate_image
 from django.forms.models import BaseInlineFormSet
 from django.core.exceptions import ValidationError
 
@@ -49,6 +49,11 @@ class ProductAdmin(admin.ModelAdmin):
     def get_tags(self, obj):
         return ", ".join([t.name for t in obj.tags.all()])
     get_tags.short_description = 'Tags'
+
+
+@admin.register(BestSeller)
+class BestSellerAdmin(admin.ModelAdmin):
+    list_display = ('product', 'added_on')
 
 admin.site.register(Product, ProductAdmin)
 admin.site.register(ProductImage)

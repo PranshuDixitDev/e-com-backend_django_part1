@@ -2,7 +2,7 @@
 import difflib
 from venv import logger
 from rest_framework import viewsets
-from .models import Product
+from .models import Product, BestSeller
 from .serializers import ProductSerializer
 from rest_framework.permissions import IsAdminUser, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework import permissions, viewsets
@@ -34,7 +34,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     pagination_class = ProductPagination
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'get_products_by_category']:
+        if self.action in ['list', 'retrieve', 'get_products_by_category', 'best_sellers']:
             permission_classes = [IsAuthenticatedOrReadOnly]
         elif self.action == 'create':
             permission_classes = [IsAdminUser]
@@ -102,6 +102,16 @@ class ProductViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Error fetching products for category {category_id}: {e}")
             return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    @action(detail=False, methods=['get'], url_path='best-sellers', permission_classes=[IsAuthenticatedOrReadOnly])
+    def best_sellers(self, request):
+        """Retrieve a list of best-seller products."""
+        best_sellers = BestSeller.objects.all().select_related('product')
+        products = [bs.product for bs in best_sellers]
+        serializer = ProductSerializer(products, many=True, context={'request': request})
+        return Response(serializer.data)
+
 
 class BulkUploadProductsView(APIView):
     parser_classes = [MultiPartParser, FormParser]

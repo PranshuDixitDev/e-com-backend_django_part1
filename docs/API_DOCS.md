@@ -890,6 +890,8 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
 }
 ```
 
+
+
 ## Unified Search API
 
 - **URL**: `/api/search/`
@@ -1275,7 +1277,213 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
         ]
     }
   ``` 
+
+
+### Cart API CRUD Docs :
+
+
+- **1. Add Item to Cart**:
   
+  - **API Endpoint**:
+  - **Method**:  `POST` 
+  - **URL**: `/api/cart/add_to_cart/`
+  - **Authentication**: Yes (JWT or session-based)
+
+  
+### Product POST Request Body :
+  ```json
+  {
+  "product_id": 1,
+  "quantity": 2,
+  "price_weight": {
+    "price": "2100.00",
+    "weight": "100gms"
+  }
+}
+  ```
+
+### Success Response for POST  (Code: 201 CREATED):
+
+```json
+{
+  "status": "Added to cart"
+}
+
+```
+### Error Response (Code: 400 Bad Request)
+
+```json
+{
+  "error": "Product not found"
+}
+
+OR
+{
+  "error": "Price-weight combination not found"
+}
+
+OR
+{
+  "error": "Not enough stock for prodcutname"
+}
+
+OR
+{
+  "error": "Price and weight must be provided"
+}
+```
+
+- **2. Retrieve Cart**:
+
+  - **API Endpoint**:
+  - **Method**: `GET` 
+  - **URL**: `/api/cart/retrieve_cart/`
+  - **Authentication**: Yes (JWT or session-based)
+  - **Description**: Retrieves the current cart for the user or guest session.
+
+### Success Response for GET (Code: 200 OK):
+
+```json
+{
+    "cart_id": 4,
+    "user": 28,
+    "items": [
+        {
+            "cart_item_id": 3,
+            "product": {
+                "product_id": 2,
+                "name": "prodtest2",
+                "category_id": 2,
+                "inventory": 20,
+                "images": [
+                    {
+                        "image_url": "/media/products/2/bg-fur.webp",
+                        "description": "prod22"
+                    }
+                ],
+                "is_active": true,
+                "status": "In stock"
+            },
+            "selected_price_weight": {
+                "price": "2200.00",
+                "weight": "100gms"
+            },
+            "quantity": 1,
+            "total_price": 2200.0
+        }
+    ],
+    "created_at": "2024-09-18T10:37:33.873065Z",
+    "updated_at": "2024-09-18T10:37:33.873089Z"
+}
+```
+### Error Response (404 NOT FOUND)
+
+```json
+{
+  "error": "Cart not found"
+}
+
+```
+
+- **3. Update Cart Item**:
+
+  - **API Endpoint**:
+  - **Method**: `PUT`
+  - **URL**: `/api/cart/{cart_item_id}/update_cart_item/`
+  - **Authentication**: Yes (JWT or session-based)
+  - **Description**: Updates the quantity of an existing item in the cart.
+
+### Product PUT Request Body (you can update the quantity and/or price_weight):
+```json
+{
+  "quantity": 2,
+  "price_weight": {
+    "price": "2100.00",
+    "weight": "102gms"
+  }
+}
+
+```
+### Product PUT Request Body (you can update the quantity only):
+```json
+{
+  "quantity": 2
+}
+```
+### Product PUT Request Body (you can update the Price-Weight Combo only):
+```json
+{
+  "price_weight": {
+    "price": "2100.00",
+    "weight": "102gms"
+  }
+}
+
+```
+### Success Response for PUT/PATCH (Code: 200 OK):
+
+```json
+{
+    "status": "Cart item updated"
+}
+
+```
+### Error Response (Code: 404 NOT FOUND):
+```json
+{
+    "error": "Price-weight combination not found",
+    "available_combinations": [
+        {
+            "price": "2100.00",
+            "weight": "102gms"
+        },
+        {
+            "price": "2200.00",
+            "weight": "100gms"
+        },
+        {
+            "price": "2000.00",
+            "weight": "100gms"
+        }
+    ]
+}
+
+```
+
+
+### Product DELETE Operation:
+
+- **URL**: `/api/products/{id}/`
+- **Method**: `DELETE`
+- **Auth Required**: Yes(Admin only)
+- **Permissions**: Admin access required
+- **Description**: Deletes the product with the specified ID.
+
+
+### Success Response for DELETE (Code: 204 NO CONTENT):
+```json
+{}
+```
+
+
+### Error Response (Code: 404 NOT FOUND):
+```json
+{
+    "error": "Price-weight combination not found",
+    "available_combinations": [
+        {
+            "price": "2100.00",
+            "weight": "102gms"
+        },
+        {
+            "price": "2200.00",
+            "weight": "100gms"
+        }
+    ]
+}
+
+```
+
 ## Usage Example:
 
 -**To manage products, users will**:

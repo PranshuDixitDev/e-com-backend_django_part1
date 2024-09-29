@@ -30,6 +30,7 @@ class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
     tags = TagListSerializerField()
     price_weights = PriceWeightComboSerializer(many=True)
     category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
+    category_name = serializers.CharField(source='category.name', read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     is_active = serializers.BooleanField()
     status = serializers.SerializerMethodField()
@@ -37,7 +38,7 @@ class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ['id', 'name', 'category', 'inventory', 'tags', 'price_weights', 'images', 'is_active', 'status']
+        fields = ['id', 'name', 'category', 'category_name', 'inventory', 'tags', 'price_weights', 'images', 'is_active', 'status']
         depth = 1
 
     def get_status(self, obj):

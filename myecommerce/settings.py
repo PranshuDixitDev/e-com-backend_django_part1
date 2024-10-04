@@ -56,7 +56,7 @@ SECRET_KEY = config('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = ['gujjumasala.in', 'api.gujjumasala.in', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = config('ALLOWED_HOSTS').split(',')
 
 
 # Application definition
@@ -120,8 +120,8 @@ REST_FRAMEWORK = {
 AUTH_USER_MODEL = 'users.CustomUser' 
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -146,6 +146,7 @@ CORS_ALLOW_ALL_ORIGINS = True  # Be cautious with this in production
 # Or, allow specific origins
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:8000',  # Allow local development
+    'https://www.gujjumasala.in',
     # 'https://example.com',
 ]
 
@@ -177,6 +178,24 @@ SITE_ID = 1
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': config('DATABASE_NAME'),
+#         'USER': config('DATABASE_USER'),
+#         'PASSWORD': config('DATABASE_PASSWORD'),
+#         'HOST': config('DATABASE_HOST'),
+#         'PORT': config('DATABASE_PORT'),
+#         'TEST': {
+#             'NAME': 'test_myecommerce',
+#             'DEPENDENCIES': [],
+#             'SERIALIZE': False,
+#             'MIRROR': None,
+#         },
+#     }
+# }
+
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -184,17 +203,9 @@ DATABASES = {
         'USER': config('DATABASE_USER'),
         'PASSWORD': config('DATABASE_PASSWORD'),
         'HOST': config('DATABASE_HOST'),
-        'PORT': config('DATABASE_PORT'),
-        'TEST': {
-            'NAME': 'test_myecommerce',
-            'DEPENDENCIES': [],
-            'SERIALIZE': False,
-            'MIRROR': None,
-        },
+        'PORT': config('DATABASE_PORT', default='5432'),
     }
 }
-
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
@@ -230,7 +241,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 # Media files
 MEDIA_URL = '/media/'

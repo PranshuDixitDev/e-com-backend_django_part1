@@ -147,7 +147,8 @@ CORS_ALLOW_ALL_ORIGINS = True  # Be cautious with this in production
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:8000',  # Allow local development
     'https://www.gujjumasala.in',
-    'https://43.204.235.86'
+    'http://43.204.235.86',
+    'https://43.204.235.86:8000',
     # 'https://example.com',
 ]
 

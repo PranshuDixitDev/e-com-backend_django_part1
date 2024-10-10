@@ -54,11 +54,9 @@ LOGGING = {
 SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=False, cast=bool)
-
+# DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = False
 ALLOWED_HOSTS = config('ALLOWED_HOSTS').split(',')
-print("ALLOWED_HOSTS =", ALLOWED_HOSTS)
-
 
 # Application definition
 
@@ -141,6 +139,17 @@ CSRF_COOKIE_SECURE = True  # Use secure cookies for CSRF token
 SESSION_COOKIE_SECURE = True  # Use secure cookies for the session cookie
 CSRF_COOKIE_HTTPONLY = True  # HttpOnly flag for CSRF cookie (if applicable)
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://gujjumasala.in',
+    'https://www.gujjumasala.in',
+    'https://api.gujjumasala.in',
+]
+
+
+SECURE_SSL_REDIRECT = True  # Redirect all HTTP requests to HTTPS
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Tell Django it’s behind a proxy
+
 # Allow all origins
 CORS_ALLOW_ALL_ORIGINS = True  # Be cautious with this in production
 
@@ -150,6 +159,8 @@ CORS_ALLOWED_ORIGINS = [
     'https://www.gujjumasala.in',
     'http://43.204.235.86',
     'https://43.204.235.86:8000',
+    'https://gujjumasala.in',
+    'https://api.gujjumasala.in',
     # 'https://example.com',
 ]
 

@@ -21,6 +21,13 @@ class CategorySerializer(serializers.ModelSerializer):
         return value
 
    
+    def validate_image(self, value):
+        """ Ensure image is not empty. """
+        if value is None:
+            raise serializers.ValidationError("Image is required.")
+        return value
+    
+
     def create(self, validated_data):
         tags_data = validated_data.pop('tags', [])  # Extract tags data if provided
         instance = super().create(validated_data)
@@ -34,11 +41,4 @@ class CategorySerializer(serializers.ModelSerializer):
         if tags_data is not None:
             instance.tags.set(*tags_data)
         return super().update(instance, validated_data)
-    
-    
-    def validate_image(self, value):
-        """ Ensure image is not empty. """
-        if value is None:
-            raise serializers.ValidationError("Image is required.")
-        return value
     

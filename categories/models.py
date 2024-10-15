@@ -13,16 +13,20 @@ def validate_image(image):
         raise ValidationError("Image must be in PNG, JPG, JPEG, or WEBP format.")
 
 
-def get_placeholder_image():
-    return '/Users/pranshudixit/Downloads/bedroom.webp'
 
 class Category(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField()
     secondary_description = models.TextField(blank=True, null=True)
     tags = TaggableManager()
-    image = models.ImageField(upload_to='category_images/', validators=[validate_image], default=get_placeholder_image)
-    secondary_image = models.ImageField(upload_to='category_images/', validators=[validate_image], blank=True, null=True, default=get_placeholder_image)
+    image = models.ImageField(upload_to='category_images/',
+                            validators=[validate_image],
+                            blank=False, 
+                            null=False)
+    secondary_image = models.ImageField(upload_to='category_images/',
+                                        validators=[validate_image],
+                                        blank=True,
+                                        null=True)
 
 
     def __str__(self):

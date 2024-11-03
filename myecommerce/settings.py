@@ -132,9 +132,13 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
-CSP_DEFAULT_SRC = ("'none'",)
-CSP_SCRIPT_SRC = ("'self'", 'https://apis.example.com')
-CSP_STYLE_SRC = ("'self'", 'https://fonts.googleapis.com')
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'https://apis.example.com', 'https://ajax.googleapis.com')
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", 'https://fonts.googleapis.com')
+CSP_IMG_SRC = ("'self'", 'data:', 'https://api.gujjumasala.in', 'https://www.gujjumasala.in')
+CSP_FONT_SRC = ("'self'", 'https://fonts.gstatic.com')
+CSP_CONNECT_SRC = ("'self'", 'https://api.gujjumasala.in')
+
 
 CSRF_COOKIE_SECURE = True  # Use secure cookies for CSRF token
 SESSION_COOKIE_SECURE = True  # Use secure cookies for the session cookie

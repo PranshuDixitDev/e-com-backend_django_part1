@@ -1,27 +1,29 @@
 # products/api.py
-import difflib
-from venv import logger
+# import difflib
+import logging
 from rest_framework import viewsets
 from .models import Product, BestSeller
 from .serializers import ProductSerializer
 from rest_framework.permissions import IsAdminUser, IsAuthenticatedOrReadOnly, IsAuthenticated
-from rest_framework import permissions, viewsets
+from rest_framework import permissions
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 from .utils import bulk_upload_products
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import viewsets, status
+from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from django.db import transaction
 from rest_framework.decorators import action
 import time
-from django.contrib.postgres.search import SearchVector
-import logging
+# from django.contrib.postgres.search import SearchVector
 from rest_framework.pagination import PageNumberPagination
 from categories.models import Category
+from .models import PriceWeight
+from .serializers import PriceWeightComboSerializer
 
 
+logger = logging.getLogger(__name__)
 class ProductPagination(PageNumberPagination):
     page_size = 10 
 
@@ -41,45 +43,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         else:
             permission_classes = [IsAuthenticated]  # Adjust for other actions (update, delete)
         return [permission() for permission in permission_classes]
-    
-
-    
-
-    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser], url_path='adjust-inventory')
-    def adjust_inventory(self, request, pk=None):
-        new_inventory = request.data.get('new_inventory')
-        try:
-            new_inventory = int(new_inventory)
-            if new_inventory < 0:
-                return Response({"error": "Inventory cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
-
-            with transaction.atomic():
-                # Lock the product row for the duration of this transaction
-                product = Product.objects.select_for_update().get(pk=pk)
-                time.sleep(1)  # Simulating a delay to test transaction locking
-                product.inventory = new_inventory
-                product.save()
-
-                low_stock_warning = None
-                if product.inventory <= 5:
-                    low_stock_warning = f"Warning: Low stock for {product.name}. Only {product.inventory} items left."
-
-                response_data = {
-                    "status": "inventory updated",
-                    "new_inventory": product.inventory
-                }
-                if low_stock_warning:
-                    response_data['low_stock_warning'] = low_stock_warning
-
-                return Response(response_data, status=status.HTTP_200_OK)
-
-        except ValueError:
-            return Response({"error": "Inventory must be a valid integer."}, status=status.HTTP_400_BAD_REQUEST)
-        except Product.DoesNotExist:
-            return Response({"error": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.error(f"Error adjusting inventory: {e}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
     @action(detail=False, methods=['get'], url_path='by-category/(?P<category_id>[^/.]+)', permission_classes=[IsAuthenticatedOrReadOnly])
@@ -111,6 +74,57 @@ class ProductViewSet(viewsets.ModelViewSet):
         products = [bs.product for bs in best_sellers]
         serializer = ProductSerializer(products, many=True, context={'request': request})
         return Response(serializer.data)
+
+
+class PriceWeightViewSet(viewsets.ModelViewSet):
+    queryset = PriceWeight.objects.all()
+    serializer_class = PriceWeightComboSerializer
+    permission_classes = [IsAdminUser]
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser], url_path='adjust-inventory')
+    def adjust_inventory(self, request, pk=None):
+        new_inventory = request.data.get('new_inventory')
+        try:
+            new_inventory = int(new_inventory)
+            if new_inventory < 0:
+                return Response({"error": "Inventory cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
+
+            with transaction.atomic():
+                # Lock the PriceWeight row for the duration of this transaction
+                price_weight = PriceWeight.objects.select_for_update().get(pk=pk)
+                price_weight.inventory = new_inventory
+                price_weight.save()
+
+                # Update product availability
+                price_weight.product.update_availability()
+
+                low_stock_warning = None
+                if price_weight.inventory <= 5:
+                    low_stock_warning = f"Warning: Low stock for {price_weight.product.name} - {price_weight.weight}. Only {price_weight.inventory} items left."
+
+                response_data = {
+                    "status": "Inventory updated",
+                    "new_inventory": price_weight.inventory
+                }
+                if low_stock_warning:
+                    response_data['low_stock_warning'] = low_stock_warning
+
+                return Response(response_data, status=status.HTTP_200_OK)
+
+        except ValueError:
+            return Response({"error": "Inventory must be a valid integer."}, status=status.HTTP_400_BAD_REQUEST)
+        except PriceWeight.DoesNotExist:
+            return Response({"error": "PriceWeight not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error adjusting inventory: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+        except ValueError:
+            return Response({"error": "Inventory must be a valid integer."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Error adjusting inventory: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class BulkUploadProductsView(APIView):

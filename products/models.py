@@ -20,21 +20,33 @@ class PriceWeight(models.Model):
     product = models.ForeignKey('Product', related_name='price_weights', on_delete=models.CASCADE)
     price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))], default=Decimal('2000.00'))
     weight = models.CharField(max_length=50, default='100gms')
+    inventory = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
 
     class Meta:
         unique_together = ('product', 'price', 'weight')
 
-    def __str__(self):
-        return f"₹{self.price} for {self.weight}"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Update product availability after saving a PriceWeight instance
+        self.product.update_availability()
+    
+    def __str__(self):
+        return f"{self.product.name} - {self.weight} - ₹{self.price} (Inventory: {self.inventory})"
+    
 class Product(models.Model):
     """ Main product model. """
     name = models.CharField(max_length=255, unique=True)
     description = models.TextField()
     category = models.ForeignKey(Category, related_name='products', on_delete=models.CASCADE)
     tags = TaggableManager()
-    inventory = models.IntegerField(default=0, validators=[MinValueValidator(0)])
     is_active = models.BooleanField(default=True, help_text="Uncheck this box to deactivate the product.")
+
+    def update_availability(self):
+        in_stock = self.price_weights.filter(inventory__gt=0).exists()
+        if self.is_active != in_stock:
+            self.is_active = in_stock
+            self.save(update_fields=['is_active'])
 
     def __str__(self):
         return self.name

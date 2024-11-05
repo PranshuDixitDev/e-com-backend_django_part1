@@ -4,6 +4,7 @@ from .models import BestSeller, Product, ProductImage, PriceWeight, validate_ima
 from django.forms.models import BaseInlineFormSet
 from django.core.exceptions import ValidationError
 
+
 # Custom form for ProductImage to ensure image validation is applied
 class ProductImageForm(forms.ModelForm):
     def clean_image(self):
@@ -24,14 +25,26 @@ class PriceWeightInlineFormSet(BaseInlineFormSet):
             raise ValidationError('At least 3 price-weight combinations are required.')
         if count > 5:
             raise ValidationError('No more than 5 price-weight combinations are allowed.')
+        
+        # Additional validation for inventory
+        for form in self.forms:
+            if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                inventory = form.cleaned_data.get('inventory')
+                if inventory is None or inventory < 0:
+                    raise ValidationError('Inventory must be a non-negative integer.')
 
 # Inline admin for PriceWeight
 class PriceWeightInline(admin.TabularInline):
     model = PriceWeight
     formset = PriceWeightInlineFormSet
+    fields = ['price', 'weight', 'inventory', 'status']
+    readonly_fields = ['status']
     extra = 3  # Start with 3 empty forms
     max_num = 5  # Limit the number of price weights to 5
 
+    def status(self, obj):
+        return "In stock" if obj.inventory > 0 else "Out of stock"
+    
 # Inline admin for ProductImage
 class ProductImageInline(admin.TabularInline):
     model = ProductImage

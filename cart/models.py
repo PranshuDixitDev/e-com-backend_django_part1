@@ -32,7 +32,8 @@ class CartItem(models.Model):
     )  # Stores the selected price-weight combination
 
     def __str__(self):
-        return f"{self.quantity} x {self.product.name} ({self.selected_price_weight.weight})"
+        product = self.selected_price_weight.product
+        return f"{self.quantity} x {product.name} ({self.selected_price_weight.weight})"
 
     @property
     def total_price(self):
@@ -40,10 +41,7 @@ class CartItem(models.Model):
 
     def clean(self):
         super().clean()
-        if self.selected_price_weight.product != self.product:
-            raise ValidationError(
-                'Selected price-weight does not match the product.'
-            )
+
 
     def save(self, *args, **kwargs):
         self.full_clean()

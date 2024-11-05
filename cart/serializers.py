@@ -3,6 +3,7 @@
 from rest_framework import serializers
 from .models import Cart, CartItem
 from products.serializers import PriceWeightComboSerializer, ProductImageSerializer
+from django.db.models import Sum
 
 class CartItemSerializer(serializers.ModelSerializer):
     cart_item_id = serializers.IntegerField(source='id')
@@ -21,16 +22,19 @@ class CartItemSerializer(serializers.ModelSerializer):
 
     def get_product(self, obj):
         product = obj.product
+        total_inventory = product.price_weights.aggregate(
+            total_inventory=Sum('inventory')
+        )['total_inventory'] or 0
         return {
             'product_id': product.id,
             'name': product.name,
             'category_id': product.category.id,
-            'inventory': product.inventory,
+            'inventory': total_inventory,
             'images': ProductImageSerializer(
                 product.images.all(), many=True
             ).data,
             'is_active': product.is_active,
-            'status': "In stock" if product.inventory > 0 else "Out of stock"
+            'status': "In stock" if total_inventory > 0 else "Out of stock"
         }
 
 class CartSerializer(serializers.ModelSerializer):

@@ -77,7 +77,7 @@ class CartViewSet(viewsets.ViewSet):
                 'error': 'Selected price-weight combination does not exist.'
             }, status=status.HTTP_404_NOT_FOUND)
 
-        if product.inventory < quantity:
+        if price_weight.inventory < quantity:
             return Response({
                 'error': 'Insufficient stock available.'
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -138,6 +138,12 @@ class CartViewSet(viewsets.ViewSet):
 
         cart_item.quantity = quantity
 
+        # Check inventory for the updated cart item
+        if cart_item.selected_price_weight.inventory < cart_item.quantity:
+            return Response({
+                'error': 'Insufficient stock available.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             cart_item.save()
         except ValidationError as e:
@@ -190,10 +196,11 @@ class CartViewSet(viewsets.ViewSet):
         cart = self.get_cart(request)
         insufficient_stock = []
 
-        for item in cart.items.select_related('product'):
-            if item.quantity > item.product.inventory:
+        for item in cart.items.select_related('selected_price_weight', 'product'):
+            if item.quantity > item.selected_price_weight.inventory:
                 insufficient_stock.append(
-                    f"{item.product.name} (Requested: {item.quantity}, Available: {item.product.inventory})"
+                    f"{item.product.name} ({item.selected_price_weight.weight}) "
+                    f"(Requested: {item.quantity}, Available: {item.selected_price_weight.inventory})"
                 )
 
         if insufficient_stock:

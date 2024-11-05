@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'whitenoise.runserver_nostatic',
     'storages',
+    'django_extensions',
 ]
 
 

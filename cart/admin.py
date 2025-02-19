@@ -4,6 +4,10 @@ from django.contrib import admin
 from .models import Cart, CartItem
 
 class CartAdmin(admin.ModelAdmin):
+    """
+    Admin view for Cart.
+    Displays user details and timestamps.
+    """
     list_display = ('id', 'get_user_username', 'get_user_email', 'get_user_full_name', 'created_at', 'updated_at')
     list_filter = ('created_at', 'updated_at', 'user')
     search_fields = ('user__username', 'user__email', 'user__first_name', 'user__last_name')
@@ -35,6 +39,10 @@ class CartAdmin(admin.ModelAdmin):
 admin.site.register(Cart, CartAdmin)
 
 class CartItemAdmin(admin.ModelAdmin):
+    """
+    Admin view for CartItem.
+    Read-only interface to prevent modifications via admin.
+    """
     list_display = ('cart', 'product', 'quantity', 'total_price')
     readonly_fields = ('cart', 'product', 'selected_price_weight', 'quantity', 'total_price')
     search_fields = ('product__name', 'cart__user__username', 'cart__user__email')

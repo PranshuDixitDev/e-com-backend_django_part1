@@ -1,9 +1,8 @@
 # cart/api.py
 
-from rest_framework import status, viewsets
+from rest_framework import status, viewsets, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from .models import Cart, CartItem
 from .serializers import CartSerializer
 from products.models import Product, PriceWeight
@@ -11,11 +10,12 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 
 class CartViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_cart(self, request):
         """
         Retrieve or create a cart for the authenticated user.
+        Clears cart items if the cart is older than 30 days.
         """
         user = request.user
         cart, created = Cart.objects.get_or_create(user=user)
@@ -46,25 +46,22 @@ class CartViewSet(viewsets.ViewSet):
 
         # Input validation
         if not product_id or not price_data:
-            return Response({
-                'error': 'Product ID and price-weight data must be provided.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Product ID and price-weight data must be provided.'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         try:
             quantity = int(quantity)
             if quantity <= 0:
                 raise ValueError
         except (ValueError, TypeError):
-            return Response({
-                'error': 'Quantity must be a positive integer.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Quantity must be a positive integer.'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         try:
             product = Product.objects.get(id=product_id, is_active=True)
         except Product.DoesNotExist:
-            return Response({
-                'error': 'Product does not exist or is inactive.'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Product does not exist or is inactive.'},
+                            status=status.HTTP_404_NOT_FOUND)
 
         try:
             price_weight = PriceWeight.objects.get(
@@ -73,14 +70,12 @@ class CartViewSet(viewsets.ViewSet):
                 weight=price_data['weight']
             )
         except PriceWeight.DoesNotExist:
-            return Response({
-                'error': 'Selected price-weight combination does not exist.'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Selected price-weight combination does not exist.'},
+                            status=status.HTTP_404_NOT_FOUND)
 
         if price_weight.inventory < quantity:
-            return Response({
-                'error': 'Insufficient stock available.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Insufficient stock available.'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         cart_item, created = CartItem.objects.get_or_create(
             cart=cart,
@@ -95,7 +90,8 @@ class CartViewSet(viewsets.ViewSet):
         try:
             cart_item.save()
         except ValidationError as e:
-            return Response({'error': e.message_dict}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': e.message_dict},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         return Response({'status': 'Added to cart'}, status=status.HTTP_201_CREATED)
 
@@ -109,7 +105,8 @@ class CartViewSet(viewsets.ViewSet):
         try:
             cart_item = CartItem.objects.get(pk=pk, cart=cart)
         except CartItem.DoesNotExist:
-            return Response({'error': 'Cart item not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Cart item not found.'},
+                            status=status.HTTP_404_NOT_FOUND)
 
         quantity = request.data.get('quantity', cart_item.quantity)
         price_data = request.data.get('price_weight')
@@ -119,9 +116,8 @@ class CartViewSet(viewsets.ViewSet):
             if quantity <= 0:
                 raise ValueError
         except (ValueError, TypeError):
-            return Response({
-                'error': 'Quantity must be a positive integer.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Quantity must be a positive integer.'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         if price_data:
             try:
@@ -132,22 +128,21 @@ class CartViewSet(viewsets.ViewSet):
                 )
                 cart_item.selected_price_weight = price_weight
             except PriceWeight.DoesNotExist:
-                return Response({
-                    'error': 'Selected price-weight combination does not exist.'
-                }, status=status.HTTP_404_NOT_FOUND)
+                return Response({'error': 'Selected price-weight combination does not exist.'},
+                                status=status.HTTP_404_NOT_FOUND)
 
         cart_item.quantity = quantity
 
         # Check inventory for the updated cart item
         if cart_item.selected_price_weight.inventory < cart_item.quantity:
-            return Response({
-                'error': 'Insufficient stock available.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Insufficient stock available.'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         try:
             cart_item.save()
         except ValidationError as e:
-            return Response({'error': e.message_dict}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': e.message_dict},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         return Response({'status': 'Cart item updated'}, status=status.HTTP_200_OK)
 
@@ -161,9 +156,11 @@ class CartViewSet(viewsets.ViewSet):
         try:
             cart_item = CartItem.objects.get(pk=pk, cart=cart)
             cart_item.delete()
-            return Response({'status': 'Cart item removed'}, status=status.HTTP_204_NO_CONTENT)
+            return Response({'status': 'Cart item removed'},
+                            status=status.HTTP_204_NO_CONTENT)
         except CartItem.DoesNotExist:
-            return Response({'error': 'Cart item not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Cart item not found.'},
+                            status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=['post'])
     def clear_cart(self, request):

@@ -53,7 +53,7 @@ class ProductImageInline(admin.TabularInline):
 
 # Main Product admin
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'description', 'category', 'get_tags', 'is_active']
+    list_display = ['name', 'slug', 'description', 'category', 'get_tags', 'is_active']
     search_fields = ['name', 'description']
     list_filter = ['category', 'is_active']
     inlines = [PriceWeightInline, ProductImageInline]

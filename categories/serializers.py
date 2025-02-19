@@ -4,11 +4,11 @@ from products.serializers import ProductSerializer
 
 class CategorySerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
-    
+    slug = serializers.CharField(read_only=True)  # Include slug in output
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'description', 'tags', 'image', 'secondary_image', 'secondary_description'] 
+        fields = ['id', 'name', 'slug', 'description', 'tags', 'image', 'secondary_image', 'secondary_description']
 
     def get_tags(self, obj):
         # Return a list of tag names

@@ -5,6 +5,8 @@ import re
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from decimal import Decimal
+from django.utils.text import slugify
+
 
 
 def validate_image(image):
@@ -20,7 +22,7 @@ class PriceWeight(models.Model):
     product = models.ForeignKey('Product', related_name='price_weights', on_delete=models.CASCADE)
     price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))], default=Decimal('2000.00'))
     weight = models.CharField(max_length=50, default='100gms')
-    inventory = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
+    inventory = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)], db_index=True)
 
     class Meta:
         unique_together = ('product', 'price', 'weight')
@@ -36,11 +38,23 @@ class PriceWeight(models.Model):
     
 class Product(models.Model):
     """ Main product model. """
-    name = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=255, unique=True, db_index=True)
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
     description = models.TextField()
     category = models.ForeignKey(Category, related_name='products', on_delete=models.CASCADE)
     tags = TaggableManager()
-    is_active = models.BooleanField(default=True, help_text="Uncheck this box to deactivate the product.")
+    is_active = models.BooleanField(default=True, help_text="Uncheck this box to deactivate the product.", db_index=True)
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+            # Ensure uniqueness by appending a counter if needed
+            counter = 1
+            original_slug = self.slug
+            while Product.objects.filter(slug=self.slug).exists():
+                self.slug = f"{original_slug}-{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
 
     def update_availability(self):
         in_stock = self.price_weights.filter(inventory__gt=0).exists()

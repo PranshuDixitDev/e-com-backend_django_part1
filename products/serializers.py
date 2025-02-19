@@ -39,12 +39,13 @@ class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     is_active = serializers.BooleanField()
+    slug = serializers.CharField(read_only=True)  # New field added
     status = serializers.SerializerMethodField()
 
 
     class Meta:
         model = Product
-        fields = ['id', 'name', 'category', 'category_name', 'tags', 'price_weights', 'images', 'is_active', 'status']
+        fields = ['id', 'name', 'slug', 'category', 'category_name', 'tags', 'price_weights', 'images', 'is_active', 'status']
         depth = 1
 
     def get_status(self, obj):

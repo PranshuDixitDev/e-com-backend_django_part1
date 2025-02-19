@@ -2,6 +2,8 @@
 from django.db import models
 from taggit.managers import TaggableManager
 from django.core.exceptions import ValidationError
+from django.utils.text import slugify
+
 
 
 def validate_image(image):
@@ -16,6 +18,7 @@ def validate_image(image):
 
 class Category(models.Model):
     name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=100, unique=True, blank=True)
     description = models.TextField()
     secondary_description = models.TextField(blank=True, null=True)
     tags = TaggableManager()
@@ -28,6 +31,18 @@ class Category(models.Model):
                                         blank=True,
                                         null=True)
 
+    class Meta:
+        ordering = ['name']
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+            counter = 1
+            original_slug = self.slug
+            while Category.objects.filter(slug=self.slug).exists():
+                self.slug = f"{original_slug}-{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

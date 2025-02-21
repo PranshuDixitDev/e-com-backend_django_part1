@@ -23,7 +23,7 @@ class CategoryTestCase(APITestCase):
             phone_number='+911234567890'  # Another unique phone number
         )
         self.category = Category.objects.create(
-            category_id="001", name="Electronics", description="Gadgets and more", image='path/to/default/image.png'
+            name="Electronics", description="Gadgets and more", image='path/to/default/image.png'
         )
 
     def test_list_categories(self):
@@ -39,7 +39,7 @@ class CategoryTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.superuser)
         with open('/Users/pranshudixit/Downloads/bedroom.webp', 'rb') as img:
-            data = {'category_id': '002', 'name': 'Books', 'description': 'Read more', 'image': img}
+            data = {'name': 'Books', 'description': 'Read more', 'image': img}
             response = self.client.post(reverse('category-list'), data, format='multipart')
             self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -49,7 +49,7 @@ class CategoryTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.user)
         with open('/Users/pranshudixit/Downloads/bedroom.webp', 'rb') as img:
-            data = {'category_id': '003', 'name': 'Toys', 'description': 'Play more', 'image': img}
+            data = {'name': 'Toys', 'description': 'Play more', 'image': img}
             response = self.client.post(reverse('category-list'), data, format='multipart')
             self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -59,7 +59,7 @@ class CategoryTestCase(APITestCase):
         """
         self.client.force_authenticate(user=self.superuser)
         data = {'name': 'Updated Electronics'}
-        response = self.client.patch(reverse('category-detail', args=[self.category.category_id]), data)
+        response = self.client.patch(reverse('category-detail', kwargs={'id': self.category.id}), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_delete_category_superuser(self):
@@ -67,7 +67,7 @@ class CategoryTestCase(APITestCase):
         Test that a superuser can delete a category.
         """
         self.client.force_authenticate(user=self.superuser)
-        response = self.client.delete(reverse('category-detail', args=[self.category.category_id]))
+        response = self.client.delete(reverse('category-detail', kwargs={'id': self.category.id}))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_unauthorized_access(self):

@@ -713,14 +713,13 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
   {
   "name": "Laptop",
   "description": "High performance laptop",
-  "category_id": 2,
-  "inventory": 50,
-  "price_weights": [
-    {"price": "50000", "weight": "1kg"},
-    {"price": "75000", "weight": "1.5kg"},
-    {"price": "100000", "weight": "2kg"}
-  ],
+  "category": 2,
   "tags": ["Computing", "High-End"],
+  "price_weights": [
+    {"price": "50000.00", "weight": "1kg", "inventory": 50},
+    {"price": "75000.00", "weight": "1.5kg", "inventory": 50},
+    {"price": "100000.00", "weight": "2kg", "inventory": 50}
+  ],
   "image_urls": ["http://example.com/image2.jpg"],
   "is_active": true
 }
@@ -738,8 +737,12 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
     "id": 2,
     "name": "Computing"
   },
-  "inventory": 50,
-  "price_weights": "50000-1kg, 75000-1.5kg, 100000-2kg",
+  "inventory": 150,  // Computed from the price_weights, for example
+  "price_weights": [
+    {"id": 5, "price": "50000.00", "weight": "1kg", "inventory": 50, "status": "In stock"},
+    {"id": 6, "price": "75000.00", "weight": "1.5kg", "inventory": 50, "status": "In stock"},
+    {"id": 7, "price": "100000.00", "weight": "2kg", "inventory": 50, "status": "In stock"}
+  ],
   "tags": ["Computing", "High-End"],
   "image_urls": ["http://example.com/image2.jpg"],
   "is_active": true
@@ -758,32 +761,20 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
     "results": [
         {
             "id": 1,
-            "name": "prodtest1",
-            "category": 1,
-            "inventory": 11,
-            "tags": [
-                "spicy"
-            ],
+            "name": "Smartphone",
+            "description": "Latest model smartphone",
+            "category": {
+                "id": 1,
+                "name": "Electronics"
+            },
+            "inventory": 100,
             "price_weights": [
-                {
-                    "price": "2100.00",
-                    "weight": "102gms"
-                },
-                {
-                    "price": "2200.00",
-                    "weight": "100gms"
-                },
-                {
-                    "price": "2002.00",
-                    "weight": "100gms"
-                }
+                {"id": 1, "price": "2000.00", "weight": "100gms", "inventory": 30, "status": "In stock"},
+                {"id": 2, "price": "3000.00", "weight": "200gms", "inventory": 40, "status": "In stock"},
+                {"id": 3, "price": "4000.00", "weight": "300gms", "inventory": 30, "status": "In stock"}
             ],
-            "images": [
-                {
-                    "image_url": "http://127.0.0.1:8000/media/products/1/bedroom.webp",
-                    "description": "photo"
-                }
-            ],
+            "tags": ["Electronics", "Gadgets"],
+            "image_urls": ["http://example.com/image1.jpg"],
             "is_active": true
         }
     ]

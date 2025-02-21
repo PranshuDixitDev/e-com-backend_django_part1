@@ -63,8 +63,10 @@ class TestOrderLifecycle(TestCase):
             quantity=2
         )
 
-    def test_invoice_generation_function(self):
-        """Test that the PDF invoice is generated and contains the order number."""
+    def create_sample_order(self):
+        """
+        Helper method to create a sample order with one order item.
+        """
         order = Order.objects.create(user=self.user, address=self.address)
         OrderItem.objects.create(
             order=order,
@@ -73,10 +75,21 @@ class TestOrderLifecycle(TestCase):
             quantity=1,
             unit_price=self.price_weight.price
         )
+        return order
+
+    def test_invoice_generation_function(self):
+        """
+        Test that the PDF invoice is generated and contains the order number.
+        Instead of looking for the full "Order Number:" line (which might be hard to extract from PDF binary),
+        we now check that the order number itself is present.
+        """
+        order = self.create_sample_order()
         invoice_pdf = generate_invoice_pdf(order)
         self.assertIsInstance(invoice_pdf, bytes)
         self.assertTrue(invoice_pdf.startswith(b'%PDF'))
-        self.assertIn(order.order_number.encode(), invoice_pdf)
+        # Check that the order number appears somewhere in the PDF (either drawn or in metadata)
+        expected_text = order.order_number.encode()
+        self.assertIn(expected_text, invoice_pdf)
 
     def test_checkout_and_inventory_deduction(self):
         """Test checkout process: order creation, inventory deduction, email sending, and cart clearance."""

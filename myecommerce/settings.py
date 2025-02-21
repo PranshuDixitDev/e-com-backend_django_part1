@@ -88,6 +88,7 @@ INSTALLED_APPS = [
     'categories',
     'products',
     'cart',
+    'orders',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'django_rest_passwordreset',

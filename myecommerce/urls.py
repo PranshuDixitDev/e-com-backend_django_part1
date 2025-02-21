@@ -29,6 +29,7 @@ urlpatterns = [
     path('api/products/', include('products.urls')),
     path('api/', include('search.urls')),
     path('api/cart/', include('cart.urls')),
+    path('orders/', include('orders.urls')),
     # JWT token endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

@@ -1482,3 +1482,103 @@ OR
   1. Prepare the necessary data in the format specified above
   2. Authenticate to obtain necessary credentials if required
   3. Send appropriate HTTP requests to the endpoints to list, create, update, or delete product records
+
+  # Orders Module Documentation
+
+## Overview
+
+The Orders module is a core part of the MyEcommerce backend. It manages the complete order lifecycle – from checkout and payment processing to invoice generation, email notifications, and order history retrieval. The module ensures that inventory is updated correctly and that users receive timely notifications about their orders.
+
+## Features
+
+- **Checkout Process**
+  - Converts the user's cart into an order.
+  - Processes payment (with support for simulating failures during testing).
+  - Deducts inventory from the associated price-weight combinations.
+  - Generates a PDF invoice for the order.
+  - Sends an order confirmation email with the invoice attached.
+  - Clears the cart after a successful checkout.
+
+- **Order History Retrieval**
+  - Provides an endpoint for users to view their past orders.
+
+- **Order Details**
+  - Allows users to retrieve detailed information for a specific order using the order number.
+
+- **Order Cancellation**
+  - Enables users to cancel an order if it is still in a cancellable state (i.e., `PENDING` or `PROCESSING`).
+  - Sends an order cancellation email upon successful cancellation.
+
+- **Helper Functions**
+  - `calculate_gst(amount)`: Calculates GST (18%) for the provided amount.
+  - `generate_invoice_pdf(order)`: Uses ReportLab to generate a PDF invoice that includes company details, order details (order number, date, shipping address), a table of order items, and totals (subtotal, GST, grand total).
+  - `send_order_confirmation_email(order, invoice_pdf)`: Sends an HTML email with the PDF invoice attached to the user after a successful checkout.
+  - `send_order_cancellation_email(order)`: Sends an email notifying the user of order cancellation.
+
+- **Error Handling**
+  - Returns appropriate HTTP status codes (e.g., 400 for bad requests, 404 for not found).
+  - Handles scenarios such as an empty cart, insufficient inventory, or invalid payment data.
+
+## Endpoints
+
+### Checkout
+
+- **URL**: `/api/orders/checkout/`
+- **Method**: `POST`
+- **Authentication**: Required (JWT token)
+- **Description**: Creates an order from the authenticated user's cart.
+- **Request Body**:
+  ```json
+  {
+      "address_id": 1,
+      "payment_data": {"simulate_failure": false}
+  }
+
+
+### Success Response (201 Created):
+
+```json
+{
+    "order_number": "ORD-XXXXXXXX",
+    "user": 1,
+    "address": 1,
+    "total_price": "1234.56",
+    "payment_status": "COMPLETED",
+    "status": "PROCESSING",
+    
+}
+
+```
+
+###	400 Bad Request if the cart is empty, no cart exists, or inventory is insufficient.
+
+- **URL**: `/api/orders/history/`
+- **Method**: `GET`
+- **Authentication**: Required (JWT token)
+- **Description**: Retrieves a list of past orders for the authenticated user.
+- **Request Body**:
+  ```json
+  [
+    {
+        "order_number": "ORD-XXXXXXXX",
+        "total_price": "1234.56",
+        "status": "PROCESSING",
+        "created_at": "2022-01-01T12:00:00Z",
+      
+    },
+    
+  ]
+
+
+### Success Response (201 Created):
+
+```json
+{
+    "order_number": "ORD-XXXXXXXX",
+    "user": 1,
+    "address": 1,
+    "total_price": "1234.56",
+    "payment_status": "COMPLETED",
+    "status": "PROCESSING",
+    
+}

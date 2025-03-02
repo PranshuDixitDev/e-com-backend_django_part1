@@ -24,10 +24,13 @@ PAYMENT_STATUS_CHOICES = [
 
 def generate_order_number():
     """
-    Generates a unique order number.
-    Uses a UUID and returns the first 10 hex digits in uppercase prefixed with 'ORD-'.
+    Generates a unique and meaningful order number.
+    Format: "RP-YYYYMMDD-<unique 6-digit hex>"
     """
-    return f"ORD-{uuid.uuid4().hex[:10].upper()}"
+    from datetime import datetime
+    date_str = datetime.now().strftime("%Y%m%d")
+    unique_part = uuid.uuid4().hex[:6].upper()
+    return f"RP-{date_str}-{unique_part}"
 
 class Order(models.Model):
     """
@@ -45,7 +48,8 @@ class Order(models.Model):
     order_number = models.CharField(max_length=20, unique=True, blank=True)
     status = models.CharField(max_length=20, choices=ORDER_STATUS_CHOICES, default='PENDING')
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
-    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, db_column='total_amount')
+    razorpay_order_id = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

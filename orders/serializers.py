@@ -1,4 +1,3 @@
-# orders/serializers.py
 from rest_framework import serializers
 from .models import Order, OrderItem
 from products.serializers import ProductSerializer, PriceWeightComboSerializer
@@ -22,9 +21,18 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'order_number', 'user', 'address', 'status', 'payment_status',
-            'total_price', 'created_at', 'updated_at', 'items'
+            'total_price', 'created_at', 'updated_at', 'items',
+            'shipping_name', 'shipment_id', 'tracking_number', 'shipping_method',
+            'carrier', 'estimated_delivery_date', 'shipping_cost'
         ]
-        read_only_fields = ['order_number', 'total_price', 'created_at', 'updated_at', 'items']
+        read_only_fields = [
+            'order_number', 'total_price', 'created_at', 'updated_at', 'items',
+            'shipping_name', 'shipment_id', 'tracking_number', 'shipping_method',
+            'carrier', 'estimated_delivery_date', 'shipping_cost'
+        ]
+    
+    def get_total_amount(self, obj):
+        return obj.total_price
 
 class OrderCreateSerializer(serializers.ModelSerializer):
     address_id = serializers.IntegerField(write_only=True)

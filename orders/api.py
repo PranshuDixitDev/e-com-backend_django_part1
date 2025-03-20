@@ -23,6 +23,8 @@ from rest_framework.decorators import action
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
+import razorpay
+
 logger = logging.getLogger(__name__)
 
 def calculate_gst(amount):
@@ -246,7 +248,14 @@ class OrderViewSet(viewsets.ViewSet):
          
          with transaction.atomic():
               order = serializer.save()
-              # Process each item in the cart.
+              # Map shipping details if provided in request.data
+              shipping_fields = ['shipping_name', 'shipment_id', 'tracking_number',
+                               'shipping_method', 'carrier', 'estimated_delivery_date', 'shipping_cost']
+              for field in shipping_fields:
+                  if field in request.data:
+                      setattr(order, field, request.data[field])
+              order.save()
+              
               for cart_item in cart.items.all():
                    # Check inventory before adding item.
                    if cart_item.quantity > cart_item.selected_price_weight.inventory:
@@ -270,8 +279,19 @@ class OrderViewSet(viewsets.ViewSet):
               if payment_data.get("simulate_failure", False):
                    payment_success = False
               else:
-                   payment_success = True
-              # Update order based on payment outcome.
+                    try:
+                         razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                         total_in_paise = int(order.total_price * 100)
+                         razorpay_order = razorpay_client.order.create({
+                              'amount': total_in_paise,
+                              'currency': 'INR',
+                              'receipt': order.order_number
+                         })
+                         order.razorpay_order_id = razorpay_order['id']
+                         payment_success = True
+                    except Exception as e:
+                         logger.error(f"Razorpay order creation failed: {e}")
+                         payment_success = False
               if payment_success:
                    order.payment_status = 'COMPLETED'
                    order.status = 'PROCESSING'

@@ -212,3 +212,32 @@ class TestOrderLifecycle(TestCase):
         response = self.client.post(checkout_url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('Cart is empty', str(response.data))
+
+    def test_checkout_with_shipping_data(self):
+        """Test that checkout stores shipping fields correctly."""
+        checkout_url = reverse('checkout')
+        shipping_data = {
+            'shipping_name': 'John Doe',
+            'shipment_id': 'SHIP123456',
+            'tracking_number': 'TRACK98765',
+            'shipping_method': 'Express',
+            'carrier': 'Porter',
+            'estimated_delivery_date': '2025-02-28',
+            'shipping_cost': "150.00"
+        }
+        data = {
+            'address_id': self.address.id,
+            'payment_data': {"dummy": "data"},
+        }
+        data.update(shipping_data)
+        response = self.client.post(checkout_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        order = Order.objects.get(order_number=response.data.get('order_number'))
+        # Assert that each shipping field is correctly saved.
+        self.assertEqual(order.shipping_name, shipping_data['shipping_name'])
+        self.assertEqual(order.shipment_id, shipping_data['shipment_id'])
+        self.assertEqual(order.tracking_number, shipping_data['tracking_number'])
+        self.assertEqual(order.shipping_method, shipping_data['shipping_method'])
+        self.assertEqual(order.carrier, shipping_data['carrier'])
+        self.assertEqual(str(order.estimated_delivery_date), shipping_data['estimated_delivery_date'])
+        self.assertEqual(str(order.shipping_cost), shipping_data['shipping_cost'])

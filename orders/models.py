@@ -42,16 +42,29 @@ class Order(models.Model):
     - 'payment_status': Payment status for the order.
     - 'total_price': Total cost calculated from order items.
     - 'created_at' & 'updated_at': Timestamps for order creation and last update.
+    - **Shipping Fields Added Below:**
+      - shipping_name, shipment_id, tracking_number, shipping_method,
+        carrier, estimated_delivery_date, shipping_cost.
     """
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     address = models.ForeignKey('users.Address', on_delete=models.SET_NULL, null=True, blank=True)
     order_number = models.CharField(max_length=20, unique=True, blank=True)
     status = models.CharField(max_length=20, choices=ORDER_STATUS_CHOICES, default='PENDING')
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
+    # total_price is stored in the database column named 'total_amount'
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, db_column='total_amount')
     razorpay_order_id = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    razorpay_order_id = models.CharField(max_length=50, blank=True, null=True)
+    # NEW SHIPPING FIELDS:
+    shipping_name = models.CharField(max_length=100, blank=True, null=True)      # The name associated with the shipment
+    shipment_id = models.CharField(max_length=100, blank=True, null=True)        # The shipment ID provided by Porter
+    tracking_number = models.CharField(max_length=100, blank=True, null=True)      # Tracking number for the shipment
+    shipping_method = models.CharField(max_length=50, blank=True, null=True)       # E.g., Standard, Express
+    carrier = models.CharField(max_length=50, blank=True, null=True)             # E.g., Porter
+    estimated_delivery_date = models.DateField(blank=True, null=True)            # Expected delivery date
+    shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)  # Cost of shipping
 
     def clean(self):
         if self.pk and self.status == 'CANCELLED':

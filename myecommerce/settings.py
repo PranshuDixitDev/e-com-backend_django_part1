@@ -15,6 +15,8 @@ from decouple import config
 import os
 from datetime import timedelta
 import sys
+import tempfile
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -89,6 +91,7 @@ INSTALLED_APPS = [
     'products',
     'cart',
     'orders',
+    'shipping',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'django_rest_passwordreset',
@@ -275,6 +278,10 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# For tests
+MEDIA_ROOT = tempfile.mkdtemp()
+MEDIA_URL = '/media/'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
@@ -322,3 +329,15 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config('GOOGLE_CLIENT_SECRET')
 # # Media files configuration
 # DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 # MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+
+
+
+# RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID')
+# RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET')
+
+# for Development use with default #
+
+RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='dummy_key')
+RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET', default='dummy_secret')
+
+SHIPROCKET_API_TOKEN = config('SHIPROCKET_API_TOKEN', default='dummy_token')

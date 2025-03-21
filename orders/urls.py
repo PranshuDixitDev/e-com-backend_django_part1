@@ -1,20 +1,14 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .api import OrderViewSet
 
-order_list = OrderViewSet.as_view({
-    'post': 'checkout',
-    'get': 'history'
-})
-order_detail = OrderViewSet.as_view({
-    'get': 'detail'
-})
-order_cancel = OrderViewSet.as_view({
-    'post': 'cancel'
-})
+router = DefaultRouter()
+router.register(r'orders', OrderViewSet, basename='order')
 
 urlpatterns = [
-    path('checkout/', order_list, name='checkout'),
-    path('history/', order_list, name='order_history'),
-    path('detail/<str:order_number>/', order_detail, name='order_detail'),
-    path('cancel/<str:order_number>/', order_cancel, name='cancel_order'),
+    path('', include(router.urls)),
+    path('checkout/', OrderViewSet.as_view({'post': 'checkout'}), name='checkout'),
+    path('history/', OrderViewSet.as_view({'get': 'history'}), name='order_history'),
+    path('orders/<str:order_number>/', OrderViewSet.as_view({'get': 'detail'}), name='order_detail'),
+    path('orders/<str:order_number>/cancel/', OrderViewSet.as_view({'post': 'cancel'}), name='cancel_order'),
 ]

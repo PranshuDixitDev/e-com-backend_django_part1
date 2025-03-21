@@ -2,6 +2,7 @@
 from rest_framework import serializers
 from .models import Product, PriceWeight, Category, ProductImage
 from taggit.serializers import (TagListSerializerField, TaggitSerializer)
+import os
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -24,13 +25,39 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductImage
-        fields = ['image_url', 'description']
+        fields = ['id', 'image', 'image_url', 'description', 'is_primary', 'created_at']
+        read_only_fields = ['image_url', 'created_at']
+        extra_kwargs = {
+            'image': {'write_only': True, 'required': True},
+        }
 
     def get_image_url(self, obj):
         request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(obj.image.url)
-        return obj.image.url
+        if obj.image:
+            return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+        return None
+
+    def validate_image(self, value):
+        # Check file size
+        if value.size > 2 * 1024 * 1024:  # 2MB limit
+            raise serializers.ValidationError("Image file too large ( > 2MB )")
+        
+        # Check file type
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.webp']
+        ext = os.path.splitext(value.name)[1].lower()
+        if ext not in valid_extensions:
+            raise serializers.ValidationError(f"Unsupported file extension. Use {', '.join(valid_extensions)}")
+        
+        return value
+
+    def create(self, validated_data):
+        # If this image is set as primary, unset other primary images
+        if validated_data.get('is_primary', False):
+            ProductImage.objects.filter(
+                product=validated_data['product'],
+                is_primary=True
+            ).update(is_primary=False)
+        return super().create(validated_data)
 
 class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
     tags = TagListSerializerField()

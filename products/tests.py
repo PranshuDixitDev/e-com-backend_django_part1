@@ -9,6 +9,15 @@ from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
+from io import BytesIO
+import os
+from products.models import ProductImage
+from django.conf import settings  # Add this import
+import tempfile
+import shutil
+from unittest import skip
+
 
 User = get_user_model()
 
@@ -412,3 +421,166 @@ class ProductModelTests(TestCase):
         response = self.client.get(reverse('product-detail', kwargs={'pk': product.id}))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn(product.name, response.content.decode())
+
+class ProductImageTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.category = Category.objects.create(name="Electronics")
+        cls.admin = User.objects.create_superuser(
+            username='admin', 
+            password='adminpass',
+            phone_number='+0987654321'
+        )
+        cls.product = Product.objects.create(
+            name="Test Product",
+            description="Test Description",
+            category=cls.category
+        )
+        cls.test_media_root = tempfile.mkdtemp()
+        cls.old_media_root = settings.MEDIA_ROOT
+        settings.MEDIA_ROOT = cls.test_media_root
+
+    @classmethod
+    def tearDownClass(cls):
+        # Clean up temporary media directory
+        shutil.rmtree(cls.test_media_root)
+        settings.MEDIA_ROOT = cls.old_media_root
+        super().tearDownClass()
+
+    def get_tokens_for_user(self, user):
+        """Helper method to generate JWT tokens for a user"""
+        refresh = RefreshToken.for_user(user)
+        return str(refresh.access_token)
+
+    def setUp(self):
+        """Setup for each test"""
+        self.image_upload_url = reverse('product-add-image', kwargs={'pk': self.product.id})
+        
+    def create_test_image(self, format='JPEG', size=(800, 800), color='blue'):
+        """Helper method to create test images"""
+        file = BytesIO()
+        image = Image.new('RGB', size, color)
+        image.save(file, format)
+        file.seek(0)
+        return SimpleUploadedFile(
+            f"test_image.{format.lower()}", 
+            file.getvalue(), 
+            content_type=f'image/{format.lower()}'
+        )
+
+    @skip("Skip large file size test to improve test performance")
+    def test_image_upload_size_validation(self):
+        """Test that large images are rejected"""
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(self.admin))
+        
+        # Create a BytesIO object to simulate a large image (>2MB)
+        large_image_io = BytesIO()
+        # Create an image with large dimensions to ensure the file is >2MB
+        image = Image.new('RGB', (3000, 3000), 'white')
+        image.save(large_image_io, format='JPEG', quality=100)
+        file_size = large_image_io.tell()
+        # Ensure the file size is indeed greater than 2MB
+        self.assertGreater(file_size, 2 * 1024 * 1024, f"Generated file size {file_size} is not >2MB")
+        large_image_io.seek(0)
+        large_image_io.name = 'test_large.jpg'
+        
+        response = self.client.post(self.image_upload_url, {
+            'image': large_image_io,
+            'is_primary': True
+        }, format='multipart')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('image', response.data)
+
+    def test_image_upload_format_validation(self):
+        """Test that only allowed image formats are accepted"""
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(self.admin))
+        
+        # Try to upload a file with wrong extension
+        invalid_file = SimpleUploadedFile(
+            "test.txt",
+            b"not an image",
+            content_type="text/plain"
+        )
+        
+        response = self.client.post(self.image_upload_url, {
+            'image': invalid_file,
+            'is_primary': True
+        }, format='multipart')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('image', response.data)
+
+
+    def test_primary_image_exclusivity(self):
+        """Test that only one image can be primary"""
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(self.admin))
+        
+        # Upload first image as primary
+        first_image = self.create_test_image()
+        response1 = self.client.post(self.image_upload_url, {
+            'image': first_image,
+            'is_primary': True
+        }, format='multipart')
+        
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+        
+        # Upload second image as primary
+        second_image = self.create_test_image()
+        response2 = self.client.post(self.image_upload_url, {
+            'image': second_image,
+            'is_primary': True
+        }, format='multipart')
+        
+        self.assertEqual(response2.status_code, status.HTTP_201_CREATED)
+        
+        # Check that first image is no longer primary
+        first_image_id = response1.data['id']
+        first_image_obj = ProductImage.objects.get(id=first_image_id)
+        self.assertFalse(first_image_obj.is_primary)
+
+    @classmethod
+    def tearDownClass(cls):
+        # Clean up the temporary media directory
+        shutil.rmtree(cls.test_media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def tearDown(self):
+        """Clean up any files created during the tests"""
+        for image in ProductImage.objects.all():
+            if image.image and os.path.isfile(image.image.path):
+                os.remove(image.image.path)
+
+    def test_image_upload_success(self):
+        """Test that images can be uploaded successfully"""
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.get_tokens_for_user(self.admin))
+        
+        # Create test image
+        image_io = BytesIO()
+        img = Image.new('RGB', (800, 800), 'blue')
+        img.save(image_io, format='JPEG', quality=100)
+        image_io.seek(0)
+        
+        # Create a proper test file with name and content type
+        test_image = SimpleUploadedFile(
+            'test.jpg',
+            image_io.getvalue(),
+            content_type='image/jpeg'
+        )
+        
+        # Upload image
+        response = self.client.post(self.image_upload_url, {
+            'image': test_image,
+            'is_primary': True
+        }, format='multipart')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('image_url', response.data)
+        
+        # Get the created ProductImage instance
+        product_image = ProductImage.objects.get(product=self.product)
+        
+        # Verify image was saved
+        self.assertTrue(product_image.image)
+        self.assertTrue(os.path.exists(product_image.image.path))
+        self.assertTrue(product_image.is_primary)

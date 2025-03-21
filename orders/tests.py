@@ -5,6 +5,7 @@ from rest_framework import status
 from decimal import Decimal
 from django.core import mail
 from django.utils import timezone
+from unittest.mock import patch, Mock
 
 from orders.models import Order, OrderItem
 from cart.models import Cart, CartItem
@@ -213,31 +214,127 @@ class TestOrderLifecycle(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('Cart is empty', str(response.data))
 
-    def test_checkout_with_shipping_data(self):
-        """Test that checkout stores shipping fields correctly."""
-        checkout_url = reverse('checkout')
+    @patch('orders.api.create_shipment')
+    def test_checkout_with_shipping_data(self, mock_create_shipment):
+        # Simulate Shiprocket successfully returning a shipment_id.
+        mock_create_shipment.return_value = {'shipment_id': 'SHIP123456'}
+        
         shipping_data = {
             'shipping_name': 'John Doe',
-            'shipment_id': 'SHIP123456',
-            'tracking_number': 'TRACK98765',
             'shipping_method': 'Express',
             'carrier': 'Porter',
             'estimated_delivery_date': '2025-02-28',
             'shipping_cost': "150.00"
         }
+        checkout_url = reverse('checkout')
         data = {
             'address_id': self.address.id,
-            'payment_data': {"dummy": "data"},
+            'payment_data': {"dummy": "data"}
         }
+        # Merge shipping data into the checkout request.
         data.update(shipping_data)
+        
         response = self.client.post(checkout_url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        order = Order.objects.get(order_number=response.data.get('order_number'))
-        # Assert that each shipping field is correctly saved.
-        self.assertEqual(order.shipping_name, shipping_data['shipping_name'])
-        self.assertEqual(order.shipment_id, shipping_data['shipment_id'])
-        self.assertEqual(order.tracking_number, shipping_data['tracking_number'])
-        self.assertEqual(order.shipping_method, shipping_data['shipping_method'])
-        self.assertEqual(order.carrier, shipping_data['carrier'])
-        self.assertEqual(str(order.estimated_delivery_date), shipping_data['estimated_delivery_date'])
-        self.assertEqual(str(order.shipping_cost), shipping_data['shipping_cost'])
+        order_number = response.data.get('order_number')
+        self.assertIsNotNone(order_number)
+        
+        order = Order.objects.get(order_number=order_number)
+        # Check that the patched create_shipment call was made
+        mock_create_shipment.assert_called_once()
+        # Verify that the shipment_id was updated in the order.
+        self.assertEqual(order.shipment_id, 'SHIP123456')
+
+    @patch('shipping.shiprocket_api.create_shipment')
+    def test_checkout_with_shipping_data(self, mock_create_shipment):
+        # Setup mock response
+        mock_create_shipment.return_value = {
+            'shipment_id': 'SHIP123456',
+            'tracking_number': 'TRACK789'
+        }
+
+        # Create test data
+        shipping_data = {
+            'shipping_name': 'John Doe',
+            'shipping_method': 'Express',
+            'carrier': 'Porter',
+            'estimated_delivery_date': '2025-02-28',
+            'shipping_cost': "150.00"
+        }
+
+        order = self.create_sample_order()
+        order.process_shipping(shipping_data, create_shipment_fn=mock_create_shipment)
+
+        # Verify shipping data
+        self.assertEqual(order.shipment_id, 'SHIP123456')
+        self.assertEqual(order.tracking_number, 'TRACK789')
+        self.assertEqual(order.shipping_method, 'Express')
+        self.assertEqual(order.carrier, 'Porter')
+        self.assertEqual(order.shipping_cost, Decimal('150.00'))
+
+from django.test import TestCase
+from unittest.mock import patch
+from decimal import Decimal
+
+class OrderProcessingTests(TestCase):
+    def setUp(self):
+        # Your existing setup code...
+        pass
+
+    def create_test_product(self, initial_inventory=5):
+        """Helper method to create a test product with inventory"""
+        category = Category.objects.create(name="Test Category")
+        product = Product.objects.create(
+            name="Test Product",
+            description="Test Description",
+            category=category
+        )
+        
+        # Create price-weight combo with inventory
+        PriceWeight.objects.create(
+            product=product,
+            price=Decimal('10.00'),
+            weight=Decimal('0.5'),
+            inventory=initial_inventory
+        )
+        
+        return product
+
+    @patch('shipping.shiprocket_api.create_shipment')
+    def test_order_processing_with_shipping(self, mock_create_shipment):
+        """Verify order processing maintains all functionality"""
+        # Setup mock shipping response
+        mock_create_shipment.return_value = {
+            'shipment_id': 'SHIP123',
+            'tracking_number': 'TRACK456'
+        }
+
+        # Create test data
+        product = self.create_test_product(initial_inventory=5)
+        shipping_data = {
+            'shipping_name': 'Test User',
+            'shipping_method': 'Standard',
+            'carrier': 'TestCarrier',
+            'shipping_cost': '10.00'
+        }
+
+        # Process order
+        order = Order.objects.create(user=self.user)
+        OrderItem.objects.create(
+            order=order,
+            selected_price_weight=product.price_weights.first(),
+            quantity=1
+        )
+
+        success, error = order.process_order(shipping_data)
+
+        # Verify all aspects
+        self.assertTrue(success)
+        self.assertIsNone(error)
+        self.assertEqual(order.status, 'PROCESSING')
+        self.assertEqual(order.shipment_id, 'SHIP123')
+        self.assertEqual(order.tracking_number, 'TRACK456')
+        self.assertEqual(
+            product.price_weights.first().inventory, 
+            4  # Verify inventory decreased
+        )

@@ -6,16 +6,24 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from decimal import Decimal
 from django.utils.text import slugify
-
+from PIL import Image
+from io import BytesIO
+from django.core.files.uploadedfile import InMemoryUploadedFile
+import sys
+from django.db import transaction
 
 
 def validate_image(image):
     """ Validates the size and format of the uploaded image. """
     file_size = image.size
-    if file_size > 2*1024*1024:  # Limit to 2MB
-        raise ValidationError("Maximum file size that can be uploaded is 2MB")
-    if not image.name.endswith(('.png', '.jpg', '.jpeg', '.webp')):
-        raise ValidationError("Image must be in PNG, JPG, JPEG, or WEBP format.")
+    max_size = 2*1024*1024  # 2MB
+    
+    if file_size > max_size:
+        raise ValidationError(f"Maximum file size allowed is {max_size/1024/1024}MB")
+    
+    allowed_formats = ['.png', '.jpg', '.jpeg', '.webp']
+    if not any(image.name.lower().endswith(fmt) for fmt in allowed_formats):
+        raise ValidationError(f"Image must be in {', '.join(allowed_formats)} format.")
 
 class PriceWeight(models.Model):
     """ Stores price and weight combinations for a product, ensures uniqueness per product. """
@@ -33,6 +41,15 @@ class PriceWeight(models.Model):
         # Update product availability after saving a PriceWeight instance
         self.product.update_availability()
     
+    @transaction.atomic
+    def decrease_inventory(self, quantity):
+        """Safely decrease inventory with proper validation"""
+        if self.inventory >= quantity:
+            self.inventory -= quantity
+            self.save(update_fields=['inventory'])
+            return True
+        return False
+
     def __str__(self):
         return f"{self.product.name} - {self.weight} - ₹{self.price} (Inventory: {self.inventory})"
     
@@ -75,6 +92,21 @@ class ProductImage(models.Model):
     product = models.ForeignKey(Product, related_name='images', on_delete=models.CASCADE)
     image = models.ImageField(upload_to=product_image_path, validators=[validate_image])
     description = models.CharField(max_length=255, blank=True)
+    is_primary = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        # Ensure only one primary image per product
+        if self.is_primary:
+            self.__class__.objects.filter(
+                product=self.product,
+                is_primary=True
+            ).exclude(id=self.id).update(is_primary=False)
+            
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-is_primary', '-created_at']
 
     def __str__(self):
         return f"Image for {self.product.name}"

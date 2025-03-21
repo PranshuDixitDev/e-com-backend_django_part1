@@ -14,6 +14,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils import timezone
+from orders.models import Order
 
 from rest_framework import status, viewsets, permissions
 from rest_framework.response import Response
@@ -24,13 +25,15 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 import razorpay
-
+from shipping.shiprocket_api import create_shipment
+logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
 
 def calculate_gst(amount):
-    """
+    """culate_gst(amount):
     Calculate GST at 18% for the given amount.
-    
+    Calculate GST at 18% for the given amount.
+    Args:
     Args:
         amount (Decimal): The monetary amount.
     
@@ -39,6 +42,7 @@ def calculate_gst(amount):
     """
     gst_rate = Decimal('0.18')
     return (amount * gst_rate).quantize(Decimal('0.01'))
+
 
 def generate_invoice_pdf(order):
     """
@@ -133,6 +137,7 @@ def generate_invoice_pdf(order):
     buffer.close()
     return pdf
 
+
 def send_order_confirmation_email(order, invoice_pdf):
     """
     Send an order confirmation email with the generated PDF invoice attached.
@@ -164,6 +169,7 @@ def send_order_confirmation_email(order, invoice_pdf):
     email.attach(f"invoice_{order.order_number}.pdf", invoice_pdf, "application/pdf")
     email.send()
 
+
 def send_order_cancellation_email(order):
     """
     Send an order cancellation email using the 'order_cancellation_email.html' template.
@@ -187,7 +193,8 @@ def send_order_cancellation_email(order):
     email.attach_alternative(html_content, "text/html")
     email.send()
 
-class OrderViewSet(viewsets.ViewSet):
+
+class OrderViewSet(viewsets.ModelViewSet):
     """
     A ViewSet for handling order-related actions such as checkout, order history retrieval,
     order detail retrieval, and order cancellation.
@@ -221,11 +228,13 @@ class OrderViewSet(viewsets.ViewSet):
     def checkout(self, request):
          """
          Checkout endpoint: creates an order from the user's cart, processes payment, generates a PDF invoice,
-         sends a confirmation email, and clears the cart.
+         sends a confirmation email, integrates with Shiprocket for shipment creation, and clears the cart.
          
          The request data should include:
            - address_id: integer, the ID of the shipping address.
            - payment_data: a dictionary; if it contains "simulate_failure": True, payment will be simulated as failed.
+           - Optional shipping details (e.g., shipping_name, shipping_method, carrier, estimated_delivery_date, shipping_cost)
+             are mapped from the request for additional information.
          
          Returns:
              JSON response with the serialized order data and HTTP status 201 if successful,
@@ -248,9 +257,8 @@ class OrderViewSet(viewsets.ViewSet):
          
          with transaction.atomic():
               order = serializer.save()
-              # Map shipping details if provided in request.data
-              shipping_fields = ['shipping_name', 'shipment_id', 'tracking_number',
-                               'shipping_method', 'carrier', 'estimated_delivery_date', 'shipping_cost']
+              # Map additional shipping details if provided in request.data (exclude fields set by Shiprocket)
+              shipping_fields = ['shipping_name', 'shipping_method', 'carrier', 'estimated_delivery_date', 'shipping_cost']
               for field in shipping_fields:
                   if field in request.data:
                       setattr(order, field, request.data[field])
@@ -299,6 +307,38 @@ class OrderViewSet(viewsets.ViewSet):
                    order.payment_status = 'FAILED'
                    order.status = 'CANCELLED'
               order.save()
+              
+              if payment_success:
+                  # --- Begin Shiprocket Integration ---
+                  shipment_payload = {
+                      "order_id": order.order_number,
+                      "order_date": order.created_at.strftime('%Y-%m-%d'),
+                      "pickup_location": {
+                          "name": "Your Warehouse Name",
+                          "address": "Your Warehouse Address",
+                          "city": "Your City",
+                          "pincode": "Your Pincode",
+                          "state": "Your State",
+                          "country": "Your Country"
+                      },
+                      "billing_customer_name": order.user.get_full_name(),
+                      "billing_last_name": "",
+                      "billing_address": order.address.address_line1,
+                      "billing_city": order.address.city,
+                      "billing_pincode": order.address.postal_code,
+                      "billing_state": order.address.state,
+                      "billing_country": order.address.country,
+                      "shipping_is_billing": True
+                      # Add any additional fields required by Shiprocket
+                  }
+                  try:
+                      from shipping.shiprocket_api import create_shipment
+                      shipment_response = create_shipment(shipment_payload)
+                      order.shipment_id = shipment_response.get('shipment_id')
+                      order.save()
+                  except Exception as e:
+                      logger.error(f"Shiprocket shipment creation failed: {e}")
+                  # --- End Shiprocket Integration ---
               
               # Generate invoice PDF and send confirmation email if payment succeeded.
               invoice_pdf = generate_invoice_pdf(order)
@@ -362,3 +402,25 @@ class OrderViewSet(viewsets.ViewSet):
          order.save()
          send_order_cancellation_email(order)
          return Response({'status': 'Order cancelled successfully.'}, status=status.HTTP_200_OK)
+
+    @transaction.atomic
+    def checkout_for_order_creation(self, request):
+        """
+        Handles the creation of an order during checkout.
+
+        This method processes shipping data, creates an order, and integrates with the shipment API.
+        """
+        shipping_data = {
+            'shipping_name': request.data.get('shipping_name'),
+            'shipping_method': request.data.get('shipping_method'),
+            'carrier': request.data.get('carrier'),
+            'estimated_delivery_date': request.data.get('estimated_delivery_date'),
+            'shipping_cost': request.data.get('shipping_cost', '0.00')
+        }
+        try:
+            order = Order.objects.create(user=request.user)
+            order.process_shipping(shipping_data, create_shipment_fn=create_shipment)
+            return Response(self.get_serializer(order).data, status=201)
+        except Exception as e:
+            transaction.set_rollback(True)
+            return Response({'error': str(e)}, status=400)

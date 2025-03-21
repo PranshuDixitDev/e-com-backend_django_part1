@@ -2,8 +2,8 @@
 # import difflib
 import logging
 from rest_framework import viewsets
-from .models import Product, BestSeller
-from .serializers import ProductSerializer
+from .models import Product, BestSeller, ProductImage
+from .serializers import ProductSerializer, ProductImageSerializer, PriceWeightComboSerializer
 from rest_framework.permissions import IsAdminUser, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework import permissions
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
@@ -20,7 +20,6 @@ import time
 from rest_framework.pagination import PageNumberPagination
 from categories.models import Category
 from .models import PriceWeight
-from .serializers import PriceWeightComboSerializer
 
 
 logger = logging.getLogger(__name__)
@@ -74,6 +73,23 @@ class ProductViewSet(viewsets.ModelViewSet):
         products = [bs.product for bs in best_sellers]
         serializer = ProductSerializer(products, many=True, context={'request': request})
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], url_path='add-image')
+    def add_image(self, request, pk=None):
+        """
+        Add an image to a product.
+        Handles primary image logic and image optimization.
+        """
+        product = self.get_object()
+        serializer = ProductImageSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            serializer.save(product=product)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PriceWeightViewSet(viewsets.ModelViewSet):

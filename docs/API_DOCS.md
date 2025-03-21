@@ -1582,3 +1582,367 @@ The Orders module is a core part of the MyEcommerce backend. It manages the comp
     "status": "PROCESSING",
     
 }
+```
+
+
+# Shipping API Documentation
+
+## Track Shipment
+- **URL**: `/api/shipping/track/{awb_number}/`
+- **Method**: `GET`
+- **Auth Required**: Yes
+- **Description**: Track shipment status using AWB number
+
+### Success Response (200 OK):
+```json
+{
+    "awb_number": "123456789",
+    "current_status": "In Transit",
+    "current_location": "Mumbai Hub",
+    "expected_delivery_date": "2024-03-25",
+    "tracking_history": [
+        {
+            "status": "Picked Up",
+            "location": "Delhi Warehouse",
+            "timestamp": "2024-03-22T10:00:00Z"
+        }
+    ]
+}
+```
+
+## Generate Shipping Label
+- **URL**: `/api/shipping/label/{order_id}/`
+- **Method**: `GET`
+- **Auth Required**: Yes
+- **Description**: Generate shipping label for an order
+
+### Success Response (200 OK):
+```json
+{
+    "label_url": "https://api.example.com/labels/123.pdf",
+    "shipping_details": {
+        "courier": "Shiprocket Express",
+        "service_type": "Standard Delivery",
+        "estimated_delivery": "2024-03-25"
+    }
+}
+```
+
+## Get Shipping Rates
+- **URL**: `/api/shipping/rates/`
+- **Method**: `POST`
+- **Auth Required**: Yes
+- **Request Body**:
+```json
+{
+    "pickup_pincode": "110001",
+    "delivery_pincode": "400001",
+    "weight": "1.5",
+    "dimensions": {
+        "length": 10,
+        "width": 10,
+        "height": 10
+    }
+}
+```
+
+### Success Response (200 OK):
+```json
+{
+    "available_services": [
+        {
+            "courier": "Shiprocket Express",
+            "rate": "150.00",
+            "estimated_days": "2-3"
+        }
+    ]
+}
+```
+
+# Payment API Documentation
+
+## Payment Gateway Integration
+- **URL**: `/api/payments/initiate/`
+- **Method**: `POST`
+- **Auth Required**: Yes
+- **Request Body**:
+```json
+{
+    "order_id": "ORD-123456",
+    "amount": "1500.00",
+    "currency": "INR",
+    "payment_method": "card"
+}
+```
+
+### Success Response (200 OK):
+```json
+{
+    "payment_id": "PAY-123456",
+    "checkout_url": "https://payment-gateway.com/checkout/123",
+    "status": "pending"
+}
+```
+
+## Payment Webhook
+- **URL**: `/api/payments/webhook/`
+- **Method**: `POST`
+- **Auth Required**: No (but requires webhook signature verification)
+- **Request Body**:
+```json
+{
+    "payment_id": "PAY-123456",
+    "order_id": "ORD-123456",
+    "status": "completed",
+    "amount": "1500.00"
+}
+```
+
+## Check Payment Status
+- **URL**: `/api/payments/status/{payment_id}/`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+### Success Response (200 OK):
+```json
+{
+    "payment_id": "PAY-123456",
+    "status": "completed",
+    "amount": "1500.00",
+    "payment_method": "card",
+    "timestamp": "2024-03-22T10:00:00Z"
+}
+```
+
+## Process Refund
+- **URL**: `/api/payments/refund/`
+- **Method**: `POST`
+- **Auth Required**: Yes
+- **Request Body**:
+```json
+{
+    "order_id": "ORD-123456",
+    "amount": "1500.00",
+    "reason": "Customer requested refund"
+}
+```
+
+### Success Response (200 OK):
+```json
+{
+    "refund_id": "REF-123456",
+    "status": "processing",
+    "amount": "1500.00",
+    "estimated_days": "5-7"
+}
+```
+
+## Payment History
+- **URL**: `/api/payments/history/`
+- **Method**: `GET`
+- **Auth Required**: Yes
+- **Query Parameters**:
+  - `page`: Page number (optional)
+  - `limit`: Results per page (optional)
+  - `start_date`: Filter by start date (optional)
+  - `end_date`: Filter by end date (optional)
+
+### Success Response (200 OK):
+```json
+{
+    "total": 50,
+    "page": 1,
+    "limit": 10,
+    "results": [
+        {
+            "payment_id": "PAY-123456",
+            "order_id": "ORD-123456",
+            "amount": "1500.00",
+            "status": "completed",
+            "payment_method": "card",
+            "timestamp": "2024-03-22T10:00:00Z"
+        }
+    ]
+}
+```
+
+# Shipping API Documentation
+
+## Track Shipment
+- **URL**: `/api/shipping/track/{awb_number}/`
+- **Method**: `GET`
+- **Auth Required**: Yes
+- **Description**: Track shipment status using AWB number
+
+### Success Response (200 OK):
+```json
+{
+    "awb_number": "123456789",
+    "current_status": "In Transit",
+    "current_location": "Mumbai Hub",
+    "expected_delivery_date": "2024-03-25",
+    "tracking_history": [
+        {
+            "status": "Picked Up",
+            "location": "Delhi Warehouse",
+            "timestamp": "2024-03-22T10:00:00Z"
+        }
+    ]
+}
+```
+
+## Generate Shipping Label
+- **URL**: `/api/shipping/label/{order_id}/`
+- **Method**: `GET`
+- **Auth Required**: Yes
+- **Description**: Generate shipping label for an order
+
+### Success Response (200 OK):
+```json
+{
+    "label_url": "https://api.example.com/labels/123.pdf",
+    "shipping_details": {
+        "courier": "Shiprocket Express",
+        "service_type": "Standard Delivery",
+        "estimated_delivery": "2024-03-25"
+    }
+}
+```
+
+## Get Shipping Rates
+- **URL**: `/api/shipping/rates/`
+- **Method**: `POST`
+- **Auth Required**: Yes
+- **Request Body**:
+```json
+{
+    "pickup_pincode": "110001",
+    "delivery_pincode": "400001",
+    "weight": "1.5",
+    "dimensions": {
+        "length": 10,
+        "width": 10,
+        "height": 10
+    }
+}
+```
+
+### Success Response (200 OK):
+```json
+{
+    "available_services": [
+        {
+            "courier": "Shiprocket Express",
+            "rate": "150.00",
+            "estimated_days": "2-3"
+        }
+    ]
+}
+```
+
+# Payment API Documentation
+
+## Payment Gateway Integration
+- **URL**: `/api/payments/initiate/`
+- **Method**: `POST`
+- **Auth Required**: Yes
+- **Request Body**:
+```json
+{
+    "order_id": "ORD-123456",
+    "amount": "1500.00",
+    "currency": "INR",
+    "payment_method": "card"
+}
+```
+
+### Success Response (200 OK):
+```json
+{
+    "payment_id": "PAY-123456",
+    "checkout_url": "https://payment-gateway.com/checkout/123",
+    "status": "pending"
+}
+```
+
+## Payment Webhook
+- **URL**: `/api/payments/webhook/`
+- **Method**: `POST`
+- **Auth Required**: No (but requires webhook signature verification)
+- **Request Body**:
+```json
+{
+    "payment_id": "PAY-123456",
+    "order_id": "ORD-123456",
+    "status": "completed",
+    "amount": "1500.00"
+}
+```
+
+## Check Payment Status
+- **URL**: `/api/payments/status/{payment_id}/`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+### Success Response (200 OK):
+```json
+{
+    "payment_id": "PAY-123456",
+    "status": "completed",
+    "amount": "1500.00",
+    "payment_method": "card",
+    "timestamp": "2024-03-22T10:00:00Z"
+}
+```
+
+## Process Refund
+- **URL**: `/api/payments/refund/`
+- **Method**: `POST`
+- **Auth Required**: Yes
+- **Request Body**:
+```json
+{
+    "order_id": "ORD-123456",
+    "amount": "1500.00",
+    "reason": "Customer requested refund"
+}
+```
+
+### Success Response (200 OK):
+```json
+{
+    "refund_id": "REF-123456",
+    "status": "processing",
+    "amount": "1500.00",
+    "estimated_days": "5-7"
+}
+```
+
+## Payment History
+- **URL**: `/api/payments/history/`
+- **Method**: `GET`
+- **Auth Required**: Yes
+- **Query Parameters**:
+  - `page`: Page number (optional)
+  - `limit`: Results per page (optional)
+  - `start_date`: Filter by start date (optional)
+  - `end_date`: Filter by end date (optional)
+
+### Success Response (200 OK):
+```json
+{
+    "total": 50,
+    "page": 1,
+    "limit": 10,
+    "results": [
+        {
+            "payment_id": "PAY-123456",
+            "order_id": "ORD-123456",
+            "amount": "1500.00",
+            "status": "completed",
+            "payment_method": "card",
+            "timestamp": "2024-03-22T10:00:00Z"
+        }
+    ]
+}
+```

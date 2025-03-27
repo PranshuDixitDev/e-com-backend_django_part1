@@ -1,3 +1,4 @@
+from decimal import Decimal
 import json
 from django.test import TestCase
 from django.core.exceptions import ValidationError
@@ -17,7 +18,10 @@ from django.conf import settings  # Add this import
 import tempfile
 import shutil
 from unittest import skip
-
+from django.test import TransactionTestCase
+from django.db import transaction
+from threading import Thread, Barrier
+from categories.models import Category
 
 User = get_user_model()
 
@@ -584,3 +588,39 @@ class ProductImageTests(APITestCase):
         self.assertTrue(product_image.image)
         self.assertTrue(os.path.exists(product_image.image.path))
         self.assertTrue(product_image.is_primary)
+
+class PriceWeightInventoryTests(TransactionTestCase):
+    def test_concurrent_inventory_decrease(self):
+        """Test concurrent inventory updates with atomic decrease_inventory."""
+        test_category = Category.objects.create(name="Test Category for Concurrency")
+        product = Product.objects.create(name="Test Product Concurrency", category=test_category)
+        price_weight = PriceWeight.objects.create(
+            product=product,
+            price=Decimal('10.00'),
+            weight='1kg',
+            inventory=10
+        )
+        num_threads = 3
+        barrier = Barrier(num_threads)
+
+        def decrease_inventory():
+            # Wait for all threads to be ready
+            barrier.wait()
+            try:
+                with transaction.atomic():
+                    # Lock the record to ensure fresh data is read
+                    obj = PriceWeight.objects.select_for_update().get(pk=price_weight.pk)
+                    obj.decrease_inventory(2)
+            except Exception as e:
+                # For testing purposes, we simply pass on exceptions
+                pass
+
+        threads = [Thread(target=decrease_inventory) for _ in range(num_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        price_weight.refresh_from_db()
+        # Expect inventory to be 10 - (2*3) = 4
+        self.assertEqual(price_weight.inventory, 4)

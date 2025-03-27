@@ -11,6 +11,7 @@ from io import BytesIO
 from django.core.files.uploadedfile import InMemoryUploadedFile
 import sys
 from django.db import transaction
+from django.db.models import F
 
 
 def validate_image(image):
@@ -43,10 +44,9 @@ class PriceWeight(models.Model):
     
     @transaction.atomic
     def decrease_inventory(self, quantity):
-        """Safely decrease inventory with proper validation"""
-        if self.inventory >= quantity:
-            self.inventory -= quantity
-            self.save(update_fields=['inventory'])
+        updated = PriceWeight.objects.filter(pk=self.pk, inventory__gte=quantity).update(inventory=F('inventory') - quantity)
+        if updated:
+            self.refresh_from_db(fields=['inventory'])
             return True
         return False
 

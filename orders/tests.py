@@ -6,6 +6,8 @@ from decimal import Decimal
 from django.core import mail
 from django.utils import timezone
 from unittest.mock import patch, Mock
+from django.contrib.auth import get_user_model
+import uuid
 
 from orders.models import Order, OrderItem
 from cart.models import Cart, CartItem
@@ -272,20 +274,67 @@ class TestOrderLifecycle(TestCase):
         self.assertEqual(order.carrier, 'Porter')
         self.assertEqual(order.shipping_cost, Decimal('150.00'))
 
-from django.test import TestCase
-from unittest.mock import patch
-from decimal import Decimal
-
 class OrderProcessingTests(TestCase):
     def setUp(self):
-        # Your existing setup code...
-        pass
+        # Create a test user.
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='testuser@example.com',
+            password='TestPassword123'
+        )
+        
+        # Create a test address for the user.
+        self.address = Address.objects.create(
+            user=self.user,
+            address_line1='123 Test Street',
+            address_line2='Apt 101',
+            city='Test City',
+            state='Test State',
+            country='Test Country',
+            postal_code='123456'
+        )
+        
+        # Create a test category.
+        self.category = Category.objects.create(
+            name='Electronics',
+            description='Category for electronic products.'
+        )
+        
+        # Create a test product.
+        self.product = Product.objects.create(
+            name='Test Product',
+            description='This product is used for testing purposes.',
+            category=self.category,
+            is_active=True
+        )
+        
+        # Create a PriceWeight object for the product.
+        self.price_weight = PriceWeight.objects.create(
+            product=self.product,
+            price=Decimal('100.00'),
+            weight='500g',
+            inventory=50  # Set inventory count high enough for testing
+        )
+        
+        # Create a cart for the user.
+        self.cart = Cart.objects.create(
+            user=self.user
+        )
+        
+        # Add a cart item to the cart.
+        self.cart_item = CartItem.objects.create(
+            cart=self.cart,
+            product=self.product,
+            selected_price_weight=self.price_weight,
+            quantity=2
+        )
 
     def create_test_product(self, initial_inventory=5):
         """Helper method to create a test product with inventory"""
         category = Category.objects.create(name="Test Category")
         product = Product.objects.create(
-            name="Test Product",
+            name="Test Product " + uuid.uuid4().hex[:6],
             description="Test Description",
             category=category
         )
@@ -300,7 +349,8 @@ class OrderProcessingTests(TestCase):
         
         return product
 
-    @patch('shipping.shiprocket_api.create_shipment')
+    @patch('orders.models.create_shipment')
+
     def test_order_processing_with_shipping(self, mock_create_shipment):
         """Verify order processing maintains all functionality"""
         # Setup mock shipping response
@@ -319,9 +369,10 @@ class OrderProcessingTests(TestCase):
         }
 
         # Process order
-        order = Order.objects.create(user=self.user)
+        order = Order.objects.create(user=self.user, address=self.address)
         OrderItem.objects.create(
             order=order,
+            product=product,
             selected_price_weight=product.price_weights.first(),
             quantity=1
         )
@@ -335,6 +386,6 @@ class OrderProcessingTests(TestCase):
         self.assertEqual(order.shipment_id, 'SHIP123')
         self.assertEqual(order.tracking_number, 'TRACK456')
         self.assertEqual(
-            product.price_weights.first().inventory, 
-            4  # Verify inventory decreased
+            product.price_weights.first().inventory, 4
+        # Verify inventory decreased
         )

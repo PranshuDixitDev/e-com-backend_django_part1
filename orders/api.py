@@ -332,7 +332,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                       # Add any additional fields required by Shiprocket
                   }
                   try:
-                      from shipping.shiprocket_api import create_shipment
+                      # Use the module-level imported create_shipment function
                       shipment_response = create_shipment(shipment_payload)
                       order.shipment_id = shipment_response.get('shipment_id')
                       order.save()

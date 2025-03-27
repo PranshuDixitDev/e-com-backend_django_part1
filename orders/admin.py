@@ -18,8 +18,9 @@ class OrderAdmin(admin.ModelAdmin):
     Admin view for Order.
     Shows key order details and includes inline OrderItems.
     """
-    list_display = ('order_number', 'user', 'status', 'payment_status', 'total_price', 'created_at')
-    list_filter = ('status', 'payment_status', 'created_at')
+    list_display = ('order_number', 'user', 'status', 'payment_status', 'total_price',
+                     'shipping_name', 'carrier', 'shipping_cost', 'created_at')
+    list_filter = ('status', 'payment_status', 'created_at', 'carrier')
     search_fields = ('order_number', 'user__username', 'user__email')
     inlines = [OrderItemInline]
     actions = ['export_orders_csv']

@@ -9,6 +9,7 @@ from django.utils import timezone
 import logging
 from django.db import transaction
 from shipping.shiprocket_api import create_shipment
+from shipping.models import ShippingLog
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +59,9 @@ class Order(models.Model):
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
     # total_price is stored in the database column named 'total_amount'
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, db_column='total_amount')
-    razorpay_order_id = models.CharField(max_length=50, blank=True, null=True)
+    razorpay_order_id = models.CharField(max_length=50, blank=True, null=True)  # Only one definition is kept.
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    razorpay_order_id = models.CharField(max_length=50, blank=True, null=True)
     # NEW SHIPPING FIELDS:
     shipping_name = models.CharField(max_length=255, null=True, blank=True)      # The name associated with the shipment
     shipment_id = models.CharField(max_length=100, null=True, blank=True)        # The shipment ID provided by Porter
@@ -112,6 +112,9 @@ class Order(models.Model):
 
     def _prepare_shipment_payload(self):
         """Prepare payload for Shiprocket API"""
+    # Ensure a shipping address exists
+        if not self.address:
+            raise ValidationError("Shipping address is required for shipment creation.")
         return {
             "order_id": self.order_number,
             "order_date": self.created_at.strftime('%Y-%m-%d'),
@@ -138,31 +141,59 @@ class Order(models.Model):
 
             # 2. Process shipping (keeping existing Shiprocket integration)
             if shipping_data:
-                # Keep existing shipping logic
-                self.shipping_name = shipping_data.get('shipping_name')
-                self.shipping_method = shipping_data.get('shipping_method', 'Standard')
-                self.carrier = shipping_data.get('carrier')
-                self.shipping_cost = Decimal(shipping_data.get('shipping_cost', '0.00'))
-                
-                # Maintain Shiprocket integration
                 try:
+                    # Prepare and validate shipping data
+                    if not shipping_data.get('shipping_name'):
+                        raise ValidationError("Shipping name is required")
+
+                    # Basic shipping info
+                    self.shipping_name = shipping_data.get('shipping_name')
+                    self.shipping_method = shipping_data.get('shipping_method', 'Standard')
+                    self.carrier = shipping_data.get('carrier')
+                    self.shipping_cost = Decimal(shipping_data.get('shipping_cost', '0.00'))
+                    
+                    # Create shipment
                     shipment_payload = self._prepare_shipment_payload()
                     shipment_response = create_shipment(shipment_payload)
+
+                    # Validate shipment response
+                    if not shipment_response.get('shipment_id'):
+                        raise ValidationError("Invalid shipping response: missing shipment_id")
+
                     self.shipment_id = shipment_response.get('shipment_id')
                     self.tracking_number = shipment_response.get('tracking_number')
-                except Exception as e:
-                    logger.error(f"Shipping API error: {str(e)}")
-                    # Don't fail the order, but log the error
                     
+                    # Log success
+                    ShippingLog.objects.create(
+                        order_number=self.order_number,
+                        endpoint="https://apiv2.shiprocket.in/v1/external/orders/create/adhoc",
+                        request_payload=str(shipment_payload),
+                        response_payload=str(shipment_response),
+                        success=True
+                    )
+
+                except Exception as e:
+                    error_message = str(e)
+                    logger.error(f"Shipping API error: {error_message}")
+                    # Log failure
+                    ShippingLog.objects.create(
+                        order_number=self.order_number,
+                        endpoint="https://apiv2.shiprocket.in/v1/external/orders/create/adhoc",
+                        request_payload=str(self._prepare_shipment_payload()),
+                        error_message=error_message,
+                        success=False
+                    )
+                    raise
+
             # 3. Update order status
             self.status = 'PROCESSING'
+            self.payment_status = 'PENDING'  # Ensure payment status is set
             self.save()
             
             return True, None
 
         except Exception as e:
             logger.error(f"Order processing failed: {str(e)}")
-            # Rollback happens automatically due to @transaction.atomic
             return False, str(e)
 
     def __str__(self):

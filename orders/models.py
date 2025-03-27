@@ -10,6 +10,7 @@ import logging
 from django.db import transaction
 from shipping.shiprocket_api import create_shipment
 from shipping.models import ShippingLog
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,30 @@ class Order(models.Model):
     carrier = models.CharField(max_length=100, null=True, blank=True)             # E.g., Porter
     estimated_delivery_date = models.DateField(blank=True, null=True)            # Expected delivery date
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))  # Cost of shipping
+    amount_paid = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Actual amount paid by customer"
+    )
+    payment_method = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Method used for payment (e.g., card, UPI, etc.)"
+    )
+    payment_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Payment gateway transaction ID"
+    )
+    payment_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the payment was completed"
+    )
+
 
     def clean(self):
         if self.pk and self.status == 'CANCELLED':
@@ -198,6 +223,35 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order {self.order_number} by {self.user.username}"
+    
+    def process_payment(self, payment_data):
+        """
+        Process payment and update order payment information.
+        Expects payment_data dict containing:
+          - amount: the amount paid (as a string or Decimal)
+          - method: payment method (e.g., card, UPI)
+          - transaction_id: the transaction id from the payment gateway
+          - simulate_failure: optional flag to simulate a failure
+        If payment fails, update payment_status as 'FAILED' and return failure.
+        """
+        try:
+            if payment_data.get("simulate_failure", False):
+                raise Exception("Simulated payment failure.")
+            self.amount_paid = Decimal(payment_data.get('amount', '0.00'))
+            self.payment_method = payment_data.get('method')
+            self.payment_id = payment_data.get('transaction_id')
+            self.payment_date = timezone.now()
+            self.payment_status = 'COMPLETED'
+            self.save(update_fields=[
+                'amount_paid', 'payment_method', 'payment_id',
+                'payment_date', 'payment_status'
+            ])
+            return True, None
+        except Exception as e:
+            logger.error(f"Payment processing failed: {e}")
+            self.payment_status = 'FAILED'
+            self.save(update_fields=['payment_status'])
+            return False, str(e)
 
 class OrderItem(models.Model):
     """

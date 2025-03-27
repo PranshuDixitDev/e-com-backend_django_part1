@@ -101,6 +101,7 @@ INSTALLED_APPS = [
     'whitenoise.runserver_nostatic',
     'storages',
     'django_extensions',
+    'import_export',
 ]
 
 

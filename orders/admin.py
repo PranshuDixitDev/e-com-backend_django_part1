@@ -4,6 +4,8 @@ from django.contrib import admin
 from django.http import HttpResponse
 import csv
 from .models import Order, OrderItem
+from orders.resources import OrderResource
+
 
 class OrderItemInline(admin.TabularInline):
     """
@@ -18,6 +20,7 @@ class OrderAdmin(admin.ModelAdmin):
     Admin view for Order.
     Shows key order details and includes inline OrderItems.
     """
+    resource_class = OrderResource
     list_display = ('order_number', 'user', 'status', 'payment_status', 'total_price',
                      'shipping_name', 'carrier', 'shipping_cost', 'created_at')
     list_filter = ('status', 'payment_status', 'created_at', 'carrier')

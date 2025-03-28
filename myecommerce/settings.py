@@ -342,3 +342,4 @@ RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='dummy_key')
 RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET', default='dummy_secret')
 
 SHIPROCKET_API_TOKEN = config('SHIPROCKET_API_TOKEN', default='dummy_token')
+WAREHOUSE_PINCODE = "380009"

@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 import logging
 from django.db import transaction
-from shipping.shiprocket_api import create_shipment
+from shipping.shiprocket_api import create_shipment, get_shipping_rate
 from shipping.models import ShippingLog
 from django.utils import timezone
 
@@ -107,33 +107,67 @@ class Order(models.Model):
             self.order_number = generate_order_number()
         # Always save to update any field changes.
         super().save(*args, **kwargs)
-        total = self.items.aggregate(
+        product_total = self.items.aggregate(
             total=models.Sum(models.F('quantity') * models.F('selected_price_weight__price'))
         )['total'] or Decimal('0.00')
-        self.total_price = total
+        self.total_price = product_total + self.shipping_cost
         # Save the state fields along with total_price.
         super().save(update_fields=['total_price', 'status', 'payment_status'])
 
+    def calculate_total_weight(self):
+        """
+        Calculate the total weight of the order in grams based on each order item.
+        Assumes each PriceWeight.weight is a string ending with 'kg', 'gms', or 'g'.
+        """
+        total_weight = 0.0
+        for item in self.items.all():
+            weight_str = item.selected_price_weight.weight.lower().strip()
+            if weight_str.endswith('kg'):
+                weight_value = float(weight_str[:-2].strip()) * 1000  # convert kg to grams
+            elif weight_str.endswith('gms'):
+                weight_value = float(weight_str[:-3].strip())
+            elif weight_str.endswith('g'):
+                weight_value = float(weight_str[:-1].strip())
+            else:
+                weight_value = float(weight_str)  # assume grams if no unit provided
+            total_weight += weight_value * item.quantity
+        return total_weight
+
+
     def process_shipping(self, shipping_data, create_shipment_fn=None):
         """Process shipping information and create shipment"""
-        # Update basic shipping info
-        self.shipping_name = shipping_data.get('shipping_name')
-        self.shipping_method = shipping_data.get('shipping_method', 'Standard')
-        self.carrier = shipping_data.get('carrier')
-        self.shipping_cost = Decimal(shipping_data.get('shipping_cost', '0.00'))
-        self.estimated_delivery_date = shipping_data.get('estimated_delivery_date')
+        try:
+            # Update basic shipping info
+            self.shipping_name = shipping_data.get('shipping_name')
+            self.shipping_method = shipping_data.get('shipping_method', 'Standard')
+            self.carrier = shipping_data.get('carrier')
+            self.shipping_cost = Decimal(shipping_data.get('shipping_cost', '0.00'))
+            self.estimated_delivery_date = shipping_data.get('estimated_delivery_date')
+            self.status = 'PROCESSING'  # Add this line to update status
 
-        if create_shipment_fn:
-            try:
+            if create_shipment_fn:
                 shipment_payload = self._prepare_shipment_payload()
                 shipment_response = create_shipment_fn(shipment_payload)
+                
+                # Validate shipping response
+                if not shipment_response.get('shipment_id'):
+                    raise ValidationError("Invalid shipping response: missing shipment_id")
+                    
                 self.shipment_id = shipment_response.get('shipment_id')
                 self.tracking_number = shipment_response.get('tracking_number')
-            except Exception as e:
-                logger.error(f"Shiprocket shipment creation failed: {e}")
-                raise
 
-        self.save()
+            self.save(update_fields=[
+                'shipping_name', 'shipping_method', 'carrier',
+                'shipping_cost', 'estimated_delivery_date',
+                'status', 'shipment_id', 'tracking_number'
+            ])
+            
+            return True
+
+        except Exception as e:
+            logger.error(f"Shipping processing failed: {str(e)}")
+            raise
+
 
     def _prepare_shipment_payload(self):
         """Prepare payload for Shiprocket API"""
@@ -167,27 +201,36 @@ class Order(models.Model):
             # 2. Process shipping (keeping existing Shiprocket integration)
             if shipping_data:
                 try:
-                    # Prepare and validate shipping data
+                    # Validate that shipping name is provided
                     if not shipping_data.get('shipping_name'):
                         raise ValidationError("Shipping name is required")
-
-                    # Basic shipping info
+    
+                    # Update basic shipping info
                     self.shipping_name = shipping_data.get('shipping_name')
                     self.shipping_method = shipping_data.get('shipping_method', 'Standard')
                     self.carrier = shipping_data.get('carrier')
-                    self.shipping_cost = Decimal(shipping_data.get('shipping_cost', '0.00'))
+    
+                    # Dynamically fetch shipping cost using Shiprocket's serviceability API
+                    service_payload = {
+                        "pickup_postcode": settings.WAREHOUSE_PINCODE,  # Ensure WAREHOUSE_PINCODE is defined in settings
+                        "delivery_postcode": self.address.postal_code,
+                        "weight": int(self.calculate_total_weight()),  # Total weight in grams
+                        "cod": False
+                    }
+                    dynamic_cost = get_shipping_rate(service_payload)
+                    self.shipping_cost = Decimal(dynamic_cost)
                     
-                    # Create shipment
+                    # Create shipment using Shiprocket's adhoc endpoint
                     shipment_payload = self._prepare_shipment_payload()
                     shipment_response = create_shipment(shipment_payload)
-
+    
                     # Validate shipment response
                     if not shipment_response.get('shipment_id'):
                         raise ValidationError("Invalid shipping response: missing shipment_id")
-
+    
                     self.shipment_id = shipment_response.get('shipment_id')
                     self.tracking_number = shipment_response.get('tracking_number')
-                    
+    
                     # Log success
                     ShippingLog.objects.create(
                         order_number=self.order_number,
@@ -196,7 +239,7 @@ class Order(models.Model):
                         response_payload=str(shipment_response),
                         success=True
                     )
-
+    
                 except Exception as e:
                     error_message = str(e)
                     logger.error(f"Shipping API error: {error_message}")

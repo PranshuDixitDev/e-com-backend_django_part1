@@ -99,7 +99,7 @@ def check_serviceability(service_payload):
         "Content-Type": "application/json",
         "Authorization": f"Bearer {settings.SHIPROCKET_API_TOKEN}"
     }
-    response = requests.post(url, json=service_payload, headers=headers)
+    response = requests.get(url, params=service_payload, headers=headers)
     response.raise_for_status()
     return response.json()
 
@@ -179,3 +179,23 @@ def print_invoice(order_number):
     response = requests.get(url, params={"order_id": order_number}, headers=headers)
     response.raise_for_status()
     return response.json()
+
+def get_shipping_rate(service_payload):
+    """
+    Get the shipping rate from Shiprocket's serviceability API.
+    
+    Args:
+        service_payload (dict): Should include keys such as 'pickup_postcode', 'delivery_postcode', 'weight', and 'cod'.
+    
+    Returns:
+        Decimal: The shipping charge.
+    
+    Raises:
+        ValueError: If shipping_charge is not found in the response.
+    """
+    response = check_serviceability(service_payload)
+    # Assuming the response structure is like: {"data": {"shipping_charge": <value>, ...}}
+    charge = response.get("data", {}).get("shipping_charge")
+    if charge is None:
+        raise ValueError("Shipping charge not found in response")
+    return charge

@@ -18,6 +18,9 @@ import sys
 import tempfile
 
 
+
+TIME_ZONE = 'Asia/Kolkata'
+USE_TZ = True
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -79,6 +82,7 @@ else:
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',   
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -91,7 +95,10 @@ INSTALLED_APPS = [
     'products',
     'cart',
     'orders',
+    'search',
     'shipping',
+    'analytics',  # For API event logging (code provided below)
+    'core',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'django_rest_passwordreset',
@@ -104,6 +111,86 @@ INSTALLED_APPS = [
     'import_export',
 ]
 
+JAZZMIN_SETTINGS = {
+    "site_title": "Gujju Admin",
+    "site_header": "Gujju Admin",
+    "site_brand": "Gujju Admin",
+    "site_logo": None,  # Add this
+    "welcome_sign": "Welcome to Gujju Admin",  # Add this
+    "copyright": "CodeKarmaTech",  # Add this
+    "search_model": ["auth.User", "users.CustomUser"],  # Add this
+    
+    # Existing settings
+    "show_sidebar": True,
+    "navigation_expanded": True,
+    "hide_apps": [],  # Add this
+    "hide_models": [],  # Add this
+    "order_with_respect_to": ["Users", "Products", "Orders", "Cart", "Analytics", "Shipping"],
+    
+    # Icons for models
+    "icons": {  # Add this section
+        "auth": "fas fa-users-cog",
+        "users.CustomUser": "fas fa-user",
+        "users.Address": "fas fa-address-card",
+        "products.Product": "fas fa-box",
+        "orders.Order": "fas fa-shopping-cart",
+        "cart.Cart": "fas fa-shopping-basket",
+        "analytics.APIEvent": "fas fa-chart-line"
+    },
+    
+    # Update custom menu
+    "custom_menu": [
+        {
+            "name": "Users",
+            "icon": "fas fa-users",
+            "models": ["auth.User", "users.CustomUser", "users.Address"],
+            "url": "auth.user"  # Add this
+        },
+        # ... rest of your custom_menu items ...
+    ],
+
+    # Add these settings
+    "show_ui_builder": True,
+    "changeform_format": "horizontal_tabs",
+    "related_modal_active": True,
+    "custom_css": None,
+    "custom_js": None,
+    "show_apps": True,
+    "show_filters": True
+}
+
+# Add this setting
+JAZZMIN_UI_TWEAKS = {
+    "navbar_small_text": False,
+    "footer_small_text": False,
+    "body_small_text": False,
+    "brand_small_text": False,
+    "brand_colour": "navbar-success",
+    "accent": "accent-teal",
+    "navbar": "navbar-dark",
+    "no_navbar_border": False,
+    "navbar_fixed": False,
+    "layout_boxed": False,
+    "footer_fixed": False,
+    "sidebar_fixed": True,
+    "sidebar": "sidebar-dark-success",
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": True,
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style": False,
+    "sidebar_nav_flat_style": False,
+    "theme": "default",
+    "dark_mode_theme": None,
+    "button_classes": {
+        "primary": "btn-primary",
+        "secondary": "btn-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success"
+    }
+}
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # Short-lived access tokens
@@ -155,9 +242,9 @@ MIDDLEWARE = [
 ]
 
 CSP_DEFAULT_SRC = ("'self'",)
-CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'https://apis.example.com', 'https://ajax.googleapis.com')
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'https://apis.example.com', 'https://ajax.googleapis.com', "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com")
 CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", 'https://fonts.googleapis.com')
-CSP_IMG_SRC = ("'self'", 'data:', 'https://api.gujjumasala.in', 'https://www.gujjumasala.in')
+CSP_IMG_SRC = ("'self'", 'data:', 'https://api.gujjumasala.in', 'https://www.gujjumasala.in', "https:")
 CSP_FONT_SRC = ("'self'", 'https://fonts.gstatic.com')
 CSP_CONNECT_SRC = ("'self'", 'https://api.gujjumasala.in')
 
@@ -343,3 +430,9 @@ RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET', default='dummy_secret')
 
 SHIPROCKET_API_TOKEN = config('SHIPROCKET_API_TOKEN', default='dummy_token')
 WAREHOUSE_PINCODE = "380009"
+SHIPROCKET_BASE_URL = "https://apiv2.shiprocket.in/v1/external"
+
+# Add admin site configuration
+ADMIN_SITE_HEADER = "Gujju Admin"
+ADMIN_SITE_TITLE = "Gujju Admin Portal"
+ADMIN_INDEX_TITLE = "Welcome to Gujju Admin"

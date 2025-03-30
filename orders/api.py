@@ -14,6 +14,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils import timezone
+from cart.models import Cart
 from orders.models import Order
 
 from rest_framework import status, viewsets, permissions
@@ -25,7 +26,24 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 import razorpay
-from shipping.shiprocket_api import create_shipment
+from shipping.shiprocket_api import ShiprocketAPIError, check_shipping_availability, create_shipment
+from users.models import Address
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+user = User.objects.first()  # or get a specific user
+
+# Create a test address
+address = Address.objects.create(
+    user=user,
+    address_line1="123 Test Street",
+    city="Mumbai",
+    state="Maharashtra",
+    postal_code="400001",
+    country="India"
+)
+print(f"Created address with ID: {address.id}")
+
 logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
 
@@ -424,3 +442,101 @@ class OrderViewSet(viewsets.ModelViewSet):
         except Exception as e:
             transaction.set_rollback(True)
             return Response({'error': str(e)}, status=400)
+
+    @action(
+        detail=False, 
+        methods=['post'], 
+        url_path='shipping/check',  # This will make the URL cleaner
+        url_name='shipping-check'
+    )
+    def check_shipping(self, request):
+        """Check shipping availability for cart items to a specific address."""
+        try:
+            # Validate required fields
+            address_id = request.data.get('address_id')
+            if not address_id:
+                return Response(
+                    {'error': 'address_id is required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get the delivery address
+            try:
+                address = Address.objects.get(
+                    id=address_id,
+                    user=request.user
+                )
+            except Address.DoesNotExist:
+                return Response(
+                    {'error': 'Invalid address ID'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Get cart and calculate total weight
+            try:
+                cart = Cart.objects.get(user=request.user)
+                if not cart.items.exists():
+                    return Response(
+                        {'error': 'Cart is empty'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Calculate total weight in KG (assuming weight is stored in grams)
+                total_weight = sum(
+                    float(item.product.weight or 0) * item.quantity 
+                    for item in cart.items.all()
+                ) / 1000  # Convert to KG
+                
+                if total_weight <= 0:
+                    return Response(
+                        {'error': 'Invalid cart weight'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            except Cart.DoesNotExist:
+                return Response(
+                    {'error': 'No active cart found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Check shipping availability
+            shipping_info = check_shipping_availability(
+                pickup_postcode=settings.WAREHOUSE_PINCODE,
+                delivery_postcode=address.postal_code,
+                weight=total_weight,
+                cod="1" if request.data.get('cod', False) else "0"  # Shiprocket expects "0" or "1"
+            )
+
+            if not shipping_info.get('available_courier_companies'):
+                return Response({
+                    'shipping_available': False,
+                    'error': 'No shipping services available for this location'
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                'shipping_available': True,
+                'delivery_estimate': shipping_info.get('estimated_delivery_days'),
+                'shipping_options': [
+                    {
+                        'courier': option.get('courier_name'),
+                        'rate': float(option.get('rate', 0)),
+                        'delivery_days': option.get('estimated_delivery_days')
+                    }
+                    for option in shipping_info.get('available_courier_companies', [])
+                ]
+            })
+
+        except ShiprocketAPIError as e:
+            logger.error(f"Shiprocket API error: {str(e)}")
+            return Response(
+                {'error': f"Shipping service unavailable: {str(e)}"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except Exception as e:
+            logger.error(f"Shipping check error: {str(e)}")
+            return Response(
+                {'error': 'Internal server error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+

@@ -1,10 +1,24 @@
 # shipping/shiprocket_api.py
 
 import requests
+import logging
+from decimal import Decimal
 from django.conf import settings
+from rest_framework.exceptions import APIException
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import status
 
 # Base URL for Shiprocket APIs (same for sandbox and production; you can also adjust this based on environment)
 SHIPROCKET_BASE_URL = "https://apiv2.shiprocket.in/v1/external"
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+class ShiprocketAPIError(APIException):
+    status_code = 503
+    default_detail = 'Shiprocket API error'
+    default_code = 'shiprocket_error'
 
 def create_shipment(order_payload):
     """
@@ -199,3 +213,40 @@ def get_shipping_rate(service_payload):
     if charge is None:
         raise ValueError("Shipping charge not found in response")
     return charge
+
+def check_shipping_availability(pickup_postcode, delivery_postcode, weight, cod=False):
+    """
+    Check shipping availability and get rates from Shiprocket.
+    """
+    url = f"{settings.SHIPROCKET_BASE_URL}/courier/serviceability/"
+    
+    payload = {
+        "pickup_postcode": pickup_postcode,
+        "delivery_postcode": delivery_postcode,
+        "weight": weight,
+        "cod": cod,
+        "mode": "surface"  # or 'air' based on your requirements
+    }
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {settings.SHIPROCKET_API_TOKEN}"
+    }
+    
+    try:
+        response = requests.get(url, params=payload, headers=headers)
+        response.raise_for_status()
+        
+        data = response.json()
+        available_couriers = data.get('data', {}).get('available_courier_companies', [])
+        
+        return {
+            'available': len(available_couriers) > 0,
+            'couriers': available_couriers,
+            'estimated_delivery_days': data.get('data', {}).get('estimated_delivery_days'),
+            'rate_list': data.get('data', {}).get('rate_list', [])
+        }
+    
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Shiprocket API error: {str(e)}")
+        raise ShiprocketAPIError(f"Shipping availability check failed: {str(e)}")

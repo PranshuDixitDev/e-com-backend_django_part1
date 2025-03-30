@@ -11,4 +11,5 @@ urlpatterns = [
     path('history/', OrderViewSet.as_view({'get': 'history'}), name='order_history'),
     path('orders/<str:order_number>/', OrderViewSet.as_view({'get': 'detail'}), name='order_detail'),
     path('orders/<str:order_number>/cancel/', OrderViewSet.as_view({'post': 'cancel'}), name='cancel_order'),
+    path('shipping/check/', OrderViewSet.as_view({'post': 'check_shipping'}), name='check_shipping'),
 ]

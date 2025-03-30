@@ -21,9 +21,10 @@ from django.views.generic.base import RedirectView
 from users.api import UserRegisterAPIView, UserLoginAPIView
 from django.conf.urls.static import static
 from django.conf import settings
+from core.admin import custom_admin_site
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('admin/', custom_admin_site.urls),
     path('api/users/', include('users.urls')),
     path('api/categories/', include('categories.urls')),
     path('api/products/', include('products.urls')),

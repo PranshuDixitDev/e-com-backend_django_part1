@@ -128,3 +128,18 @@ venv.bak/
 .mypy_cache/
 .DS_Store
 delete.txt
+
+# Static files
+static/admin/js/chart*.js
+static/admin/js/cancel.js
+static/admin/css/chart*.css
+static/admin/*.map
+
+# Compiled static files
+static/CACHE/
+static/bundles/
+*.min.js
+*.min.css
+
+# Django static collection
+staticfiles/

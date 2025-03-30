@@ -5,7 +5,7 @@ from django.http import HttpResponse
 import csv
 from .models import Order, OrderItem
 from orders.resources import OrderResource
-
+from datetime import datetime
 
 class OrderItemInline(admin.TabularInline):
     """
@@ -27,11 +27,18 @@ class OrderAdmin(admin.ModelAdmin):
     search_fields = ('order_number', 'user__username', 'user__email')
     inlines = [OrderItemInline]
     actions = ['export_orders_csv']
+    list_per_page = 25  # Add pagination
+    date_hierarchy = 'created_at'  # Add date navigation
 
     def export_orders_csv(self, request, queryset):
         """
         Exports selected orders to a CSV file with all shipping and order details.
         """
+        print("---------------------------------------Export Orders CSV action triggered")  # Debug statement
+        # Generate unique filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'orders_export_{timestamp}.csv'
+        
         # Define the field names you want in the CSV export.
         fieldnames = [
             'order_number', 'user', 'created_at', 'status', 'payment_status', 'total_price', 
@@ -39,7 +46,7 @@ class OrderAdmin(admin.ModelAdmin):
             'estimated_delivery_date', 'shipping_cost'
         ]
         response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename=orders_export.csv'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         writer = csv.DictWriter(response, fieldnames=fieldnames)
         writer.writeheader()
         for order in queryset:

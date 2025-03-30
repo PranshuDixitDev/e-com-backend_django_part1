@@ -1,0 +1,269 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+
+
+<style>
+    .dashboard-container {
+        padding: 2rem;
+        max-width: 1400px;
+        margin: 0 auto;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    .summary {
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: white;
+        padding: 2rem;
+        border-radius: 16px;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 6px rgba(79,70,229,0.15);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .summary::after {
+        content: '';
+        position: absolute;
+        top: -50px;
+        right: -50px;
+        width: 150px;
+        height: 150px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+    }
+
+    .summary h2 {
+        margin-top: 0;
+        font-size: 1.8rem;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+    }
+
+    .summary-stats {
+        display: flex;
+        gap: 3rem;
+        flex-wrap: wrap;
+    }
+
+    .summary-stat {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .summary-stat h3 {
+        font-size: 1rem;
+        font-weight: 500;
+        margin: 0 0 0.5rem;
+        opacity: 0.9;
+    }
+
+    .summary-stat p {
+        font-size: 1.6rem;
+        margin: 0;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+    }
+
+    .stat-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: 1px solid rgba(0,0,0,0.05);
+        position: relative;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .stat-card h3 {
+        color: #374151;
+        font-size: 1.1rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid #f3f4f6;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .stat-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f3f4f6;
+    }
+
+    .stat-item:last-child {
+        border-bottom: none;
+    }
+
+    .stat-label {
+        color: #6b7280;
+        font-size: 0.95rem;
+    }
+
+    .stat-number {
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+
+    .stat-number.pending { color: #f59e0b; }
+    .stat-number.processing { color: #3b82f6; }
+    .stat-number.success { color: #10b981; }
+    .stat-number.failure { color: #ef4444; }
+
+    .revenue {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+    }
+
+    .revenue h3,
+    .revenue .stat-label,
+    .revenue .stat-number {
+        color: white !important;
+    }
+
+    .revenue .stat-item {
+        border-bottom-color: rgba(255,255,255,0.15);
+    }
+
+    .dashboard-footer {
+        text-align: center;
+        margin-top: 3rem;
+        padding: 1rem;
+        background: #f8fafc;
+        border-radius: 12px;
+        color: #64748b;
+        font-size: 0.95rem;
+        position: relative;
+        z-index: 1;
+    }
+
+    @media (max-width: 768px) {
+        .dashboard-container {
+            padding: 1rem;
+        }
+
+        .summary {
+            padding: 1.5rem;
+        }
+
+        .summary-stat {
+            min-width: 100%;
+        }
+
+        .summary-stat p {
+            font-size: 1.4rem;
+        }
+    }
+
+    /* Hide Jazzmin footer */
+    footer {
+        display: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="summary">
+        <h2>Dashboard Overview</h2>
+        <div class="summary-stats">
+            <div class="summary-stat">
+                <h3>Total Revenue</h3>
+                <p>₹{{ order_stats.total_revenue|floatformat:2 }}</p>
+            </div>
+            <div class="summary-stat">
+                <h3>Active Users</h3>
+                <p>{{ user_stats.total_users }}</p>
+            </div>
+            <div class="summary-stat">
+                <h3>API Success Rate</h3>
+                <p>{{ api_success }}%</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>📦 Orders</h3>
+            <div class="stat-item">
+                <span class="stat-label">Total</span>
+                <span class="stat-number">{{ order_stats.total_orders }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Pending</span>
+                <span class="stat-number pending">{{ order_stats.pending_orders }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Processing</span>
+                <span class="stat-number processing">{{ order_stats.processing_orders }}</span>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>👥 Users</h3>
+            <div class="stat-item">
+                <span class="stat-label">Total</span>
+                <span class="stat-number">{{ user_stats.total_users }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Active</span>
+                <span class="stat-number success">{{ user_stats.active_users }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Verified</span>
+                <span class="stat-number success">{{ user_stats.verified_users }}</span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <h3>⚙️ API Health</h3>
+            <div class="stat-item">
+                <span class="stat-label">Success</span>
+                <span class="stat-number success">{{ api_success }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Failures</span>
+                <span class="stat-number failure">{{ api_failure }}</span>
+            </div>
+        </div>
+            <div class="stat-card">
+                <h3>✅ Completed Orders</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Count</span>
+                    <span class="stat-number success">{{ order_stats.completed_orders }}</span>
+                </div>
+        </div>
+
+        <div class="stat-card revenue">
+            <h3>💰 Revenue Analytics</h3>
+            <div class="stat-item">
+                <span class="stat-label">Total</span>
+                <span class="stat-number">₹{{ order_stats.total_revenue|floatformat:2 }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Avg. Order</span>
+                <span class="stat-number">₹{{ order_stats.avg_order_value|floatformat:2 }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

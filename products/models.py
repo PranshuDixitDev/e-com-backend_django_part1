@@ -61,6 +61,11 @@ class Product(models.Model):
     category = models.ForeignKey(Category, related_name='products', on_delete=models.CASCADE)
     tags = TaggableManager()
     is_active = models.BooleanField(default=True, help_text="Uncheck this box to deactivate the product.", db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', 'name']
 
     def save(self, *args, **kwargs):
         if not self.slug:

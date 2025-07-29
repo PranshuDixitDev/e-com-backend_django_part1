@@ -49,15 +49,16 @@ class ProductViewSet(viewsets.ModelViewSet):
         try:
             # Get category by ID
             category = Category.objects.get(pk=category_id)
-            # Filter products by category
+            # Filter products by category with proper ordering
             products = Product.objects.filter(category=category, is_active=True)
             serializer = ProductSerializer(products, many=True)
             page = self.paginate_queryset(products)
             if page is not None:
                 serializer = self.get_paginated_response(ProductSerializer(page, many=True).data)
+                return serializer
             else:
                 serializer = ProductSerializer(products, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+                return Response(serializer.data, status=status.HTTP_200_OK)
         except Category.DoesNotExist:
             logger.error(f"Category ID {category_id} not found.")
             return Response({"error": "Category not found."}, status=status.HTTP_404_NOT_FOUND)

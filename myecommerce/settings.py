@@ -118,7 +118,7 @@ JAZZMIN_SETTINGS = {
     "site_logo": None,  # Add this
     "welcome_sign": "Welcome to Gujju Admin",  # Add this
     "copyright": "CodeKarmaTech",  # Add this
-    "search_model": ["auth.User", "users.CustomUser"],  # Add this
+    "search_model": ["users.CustomUser"],  # Updated to use only CustomUser
     
     # Existing settings
     "show_sidebar": True,
@@ -143,8 +143,8 @@ JAZZMIN_SETTINGS = {
         {
             "name": "Users",
             "icon": "fas fa-users",
-            "models": ["auth.User", "users.CustomUser", "users.Address"],
-            "url": "auth.user"  # Add this
+            "models": ["users.CustomUser", "users.Address"],
+            "url": "custom_admin:users_customuser_changelist"
         },
         # ... rest of your custom_menu items ...
     ],
@@ -367,8 +367,8 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # For tests
-MEDIA_ROOT = tempfile.mkdtemp()
-MEDIA_URL = '/media/'
+# MEDIA_ROOT = tempfile.mkdtemp()
+# MEDIA_URL = '/media/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -377,7 +377,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Add a flag to indicate testing mode
 TESTING = 'test' in sys.argv
-if 'test' in sys.argv or sys.argv[1] == 'test':
+if 'test' in sys.argv or (len(sys.argv) > 1 and sys.argv[1] == 'test'):
     ENABLE_RATE_LIMIT = False
 else:
     ENABLE_RATE_LIMIT = True

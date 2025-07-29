@@ -745,7 +745,9 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
   ],
   "tags": ["Computing", "High-End"],
   "image_urls": ["http://example.com/image2.jpg"],
-  "is_active": true
+  "is_active": true,
+  "created_at": "2023-10-01T12:00:00Z",
+  "updated_at": "2023-10-01T12:00:00Z"
 }
 
 
@@ -775,7 +777,9 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
             ],
             "tags": ["Electronics", "Gadgets"],
             "image_urls": ["http://example.com/image1.jpg"],
-            "is_active": true
+            "is_active": true,
+            "created_at": "2023-10-01T12:00:00Z",
+            "updated_at": "2023-10-01T12:00:00Z"
         }
     ]
 }
@@ -816,7 +820,9 @@ The bulk upload functionality enhances the backend's capabilities by allowing qu
   "inventory": 100,
   "price_weights": "2000-100gms, 3000-200gms, 4000-300gms",
   "tags": ["Electronics", "Gadgets"],
-  "image_urls": ["http://example.com/image1.jpg"]
+  "image_urls": ["http://example.com/image1.jpg"],
+  "created_at": "2023-10-01T12:00:00Z",
+  "updated_at": "2023-10-01T12:00:00Z"
 }
 ```
 ### Error Response (404 NOT FOUND)
@@ -1946,3 +1952,15 @@ The Orders module is a core part of the MyEcommerce backend. It manages the comp
     ]
 }
 ```
+
+## Critical E-commerce Configuration Issues
+
+The following issues have been identified in the project configuration (primarily in `settings.py`):
+
+- **DEBUG Mode Enabled**: DEBUG is set to True, which is a security risk in production as it can expose sensitive information.
+- **Insecure CORS Settings**: CORS_ALLOW_ALL_ORIGINS is set to True, which should be restricted in production to prevent unauthorized access.
+- **Placeholder API Keys**: Razorpay and Shiprocket use dummy keys as defaults, which need to be replaced with actual credentials for live operations.
+- **Email Configuration**: Set to Gmail SMTP with commented-out alternatives (e.g., GoDaddy); ensure proper setup for production email sending.
+- **Commented-out Production Settings**: Security features like SECURE_SSL_REDIRECT, SESSION_COOKIE_SECURE, and AWS S3 storage are commented out and need enabling for production.
+
+Address these before deploying to production to ensure security and functionality.

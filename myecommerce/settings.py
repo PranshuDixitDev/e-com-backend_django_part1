@@ -27,6 +27,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'admin_actions': {
+            'format': '[ADMIN ACTION] {asctime} - {levelname} - {message}',
+            'style': '{',
+        },
+        'standard': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+        },
+    },
     'handlers': {
         'file': {
             'level': 'DEBUG',
@@ -34,14 +47,16 @@ LOGGING = {
             'filename': os.path.join(BASE_DIR, 'django_debug.log'),
             'formatter': 'standard',
         },
+        'admin_actions_file': {
+            'level': 'WARNING',
+            'class': 'logging.FileHandler',
+            'filename': 'admin_actions.log',
+            'formatter': 'admin_actions',
+        },
         'console': {
             'level': 'ERROR',
             'class': 'logging.StreamHandler',
-        },
-    },
-    'formatters': {
-        'standard': {
-            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+            'formatter': 'verbose',
         },
     },
     'loggers': {
@@ -49,6 +64,11 @@ LOGGING = {
             'handlers': ['file', 'console'],
             'level': 'DEBUG',
             'propagate': True,
+        },
+        'admin_actions': {
+            'handlers': ['admin_actions_file', 'console'],
+            'level': 'WARNING',
+            'propagate': False,
         },
     },
 }
@@ -219,8 +239,11 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',
-        'user': '1000/day'
+        'anon': '200/hour',  # Anonymous users: 200 requests per hour
+        'user': '2000/hour',  # Authenticated users: 2000 requests per hour
+        'login': '5/min',     # Login attempts: 5 per minute
+        'register': '3/min',  # Registration attempts: 3 per minute
+        'password_reset': '2/min'  # Password reset attempts: 2 per minute
     },
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
@@ -235,6 +258,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'analytics.middleware.APITrackingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'csp.middleware.CSPMiddleware',
@@ -247,6 +271,8 @@ CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", 'https://fonts.googleapis.com')
 CSP_IMG_SRC = ("'self'", 'data:', 'https://api.gujjumasala.in', 'https://www.gujjumasala.in', "https:")
 CSP_FONT_SRC = ("'self'", 'https://fonts.gstatic.com')
 CSP_CONNECT_SRC = ("'self'", 'https://api.gujjumasala.in')
+CSP_FRAME_SRC = ("'self'",)  # Allow admin modal popups
+CSP_FRAME_ANCESTORS = ("'self'",)  # Prevent clickjacking while allowing self-framing
 
 
 CSRF_TRUSTED_ORIGINS = [
@@ -390,12 +416,39 @@ else:
 # EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')  # Your GoDaddy email password
 
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = config('EMAIL_HOST_USER')  # Your Gmail address
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')  # Your Gmail password
+# Frontend base used to compose links in emails
+FRONTEND_URL = config('FRONTEND_URL', default='https://www.gujjumasala.in')
+
+# Admin notification URL for email verification events
+# Configurable for different environments (development, staging, production)
+if DEBUG:
+    ADMIN_NOTIFICATION_URL = f'http://localhost:8001/api/analytics/admin-notifications/'
+else:
+    # Production should use environment variable or proper domain
+    ADMIN_NOTIFICATION_URL = os.environ.get(
+        'ADMIN_NOTIFICATION_URL', 
+        'https://api.yourdomain.com/api/analytics/admin-notifications/'
+    )
+
+# Internal service token for secure admin notifications
+# This should be a strong, randomly generated token in production
+INTERNAL_SERVICE_TOKEN = os.environ.get(
+    'INTERNAL_SERVICE_TOKEN',
+    'dev-internal-token-change-in-production-12345'
+)
+
+# Office365 SMTP – values already configured externally; just ensure these exist
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.office365.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='no-reply@gujjumasala.in')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='Birth@1989')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
+
+# Email encryption key for secure token generation
+EMAIL_LINKS_FERNET_KEY = config('EMAIL_LINKS_FERNET_KEY', default='cmNJNrhX5YcTVkvw5tOSiJRJBc4ilv98bjfoVNNXllw=')
 
 
 AUTHENTICATION_BACKENDS = (

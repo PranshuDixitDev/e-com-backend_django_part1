@@ -58,6 +58,159 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
 
 ## Endpoints
 
+### Quickstart: End-to-End cURL Flow (Signup → Verify Email → Login → Address → Cart → Validate → Checkout → Logout)
+
+The following cURL sequence demonstrates a complete user journey using this API. Replace placeholder values (wrapped in < >) before running the commands.
+
+- Assumptions:
+  - Backend is running locally at http://127.0.0.1:8000
+  - jq is optional, used to parse JSON responses in shell. If not available, manually copy values from responses.
+
+1) Register a user
+
+```bash
+BASE="http://127.0.0.1:8000"
+USERNAME="demo_user01"
+PASSWORD="StrongP@ssw0rd!"
+EMAIL="demo_user01@example.com"
+PHONE="+919000000011"
+FIRST="Demo"
+LAST="User"
+BIRTHDATE="2000-01-01"
+
+curl -s -X POST "$BASE/api/users/register/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "'"$USERNAME"'",
+    "email": "'"$EMAIL"'",
+    "password": "'"$PASSWORD"'",
+    "first_name": "'"$FIRST"'",
+    "last_name": "'"$LAST"'",
+    "phone_number": "'"$PHONE"'",
+    "birthdate": "'"$BIRTHDATE"'"
+  }'
+```
+
+Notes:
+- A verification email is sent using an encrypted link to the frontend, which should forward the query params uid and token to the backend verification endpoint.
+
+2) Verify email (backend endpoint, using encrypted token forwarded from frontend)
+
+- From the verification link received by email on the frontend, extract the uid and token (query params), then call:
+```bash
+UID="<paste-uid-from-link>"
+TOKEN="<paste-token-from-link>"
+
+curl -G "$BASE/api/users/email-verify/" \
+  --data-urlencode "uid=$UID" \
+  --data-urlencode "token=$TOKEN"
+```
+
+3) Login to obtain JWT tokens
+
+```bash
+LOGIN_PAYLOAD='{ "login": "'"$USERNAME"'", "password": "'"$PASSWORD"'" }'
+TOKENS=$(curl -s -X POST "$BASE/api/users/login/" -H "Content-Type: application/json" -d "$LOGIN_PAYLOAD")
+ACCESS=$(echo "$TOKENS" | jq -r .access)
+REFRESH=$(echo "$TOKENS" | jq -r .refresh)
+# If jq is not available, copy values manually from the response JSON
+
+AUTH_HEADER="Authorization: Bearer $ACCESS"
+```
+
+4) Create a shipping address (optional if provided during registration)
+
+```bash
+curl -s -X POST "$BASE/api/users/addresses/" \
+  -H "$AUTH_HEADER" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address_line1": "123 Main St",
+    "address_line2": "",
+    "city": "Anytown",
+    "state": "Anystate",
+    "country": "India",
+    "postal_code": "123456"
+  }'
+```
+
+5) List addresses and capture address_id for checkout
+
+```bash
+curl -s -X GET "$BASE/api/users/addresses/" -H "$AUTH_HEADER"
+# Identify the id of the desired address from the response, e.g. ADDRESS_ID=42
+ADDRESS_ID="<paste-address-id>"
+```
+
+6) Find a product and price-weight to add to cart
+
+- Use the Unified Search endpoint to find a product and pick a valid price_weights entry (price + weight):
+```bash
+curl -s "$BASE/api/search/?q=prodtest"
+# Choose product_id and one price_weights pair from the response
+PRODUCT_ID="<paste-product-id>"
+PRICE="<paste-price-from-price_weights>"   # e.g. 599.99
+WEIGHT="<paste-weight-from-price_weights>" # e.g. 200g
+```
+
+7) Add item to cart
+
+```bash
+curl -s -X POST "$BASE/api/cart/add_to_cart/" \
+  -H "$AUTH_HEADER" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_id": '"$PRODUCT_ID"',
+    "quantity": 2,
+    "price_weight": { "price": "'"$PRICE"'", "weight": "'"$WEIGHT"'" }
+  }'
+```
+
+Possible errors:
+- 404 with {"error": "Product does not exist or is inactive."}
+- 404 with {"error": "Selected price-weight combination does not exist."}
+- 400 with {"error": "Insufficient stock available."}
+
+8) Retrieve cart
+
+```bash
+curl -s -X GET "$BASE/api/cart/retrieve_cart/" -H "$AUTH_HEADER"
+```
+
+9) Validate cart before checkout
+
+```bash
+curl -s -X POST "$BASE/api/cart/validate_cart/" -H "$AUTH_HEADER"
+# 200 OK => {"status": "Cart is valid"}
+# 400 Bad Request => {
+#   "error": "Not enough stock for the following items",
+#   "details": ["ProductName (200g) (Requested: X, Available: Y)"]
+# }
+```
+
+10) Checkout
+
+```bash
+curl -s -X POST "$BASE/api/orders/checkout/" \
+  -H "$AUTH_HEADER" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address_id": '"$ADDRESS_ID"',
+    "payment_data": {"simulate_failure": false}
+  }'
+```
+
+Success (201 Created) returns order details and triggers invoice generation and a confirmation email.
+
+11) Logout (invalidate refresh token)
+
+```bash
+curl -s -X POST "$BASE/api/users/logout/" \
+  -H "Content-Type: application/json" \
+  -H "$AUTH_HEADER" \
+  -d '{ "refresh": "'"$REFRESH"'" }'
+```
+
 ### Register
 
 - **URL**: `/api/users/register/`
@@ -70,7 +223,9 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
     "password": "[password required]",
     "email": "[valid email address required]",
     "phone_number": "[unique phone number in +919876543210 format required]",
-    "birthdate": "[date in YYYY-MM-DD format optional]",
+    "first_name": "[required]",
+    "last_name": "[required]", 
+    "birthdate": "[date in YYYY-MM-DD format required]",
     "addresses": "[optional - array of address objects]"
   }
 ### Request Body Example (Addresses Not Needed for Registration)
@@ -164,7 +319,7 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
 
 ```json
 {
-  "login": "[username or phone number]",
+  "login": "[username, email, or phone number]",
   "password": "[password]"
 }
 `````
@@ -181,6 +336,21 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
 
 
   ```
+
+### Email Verification
+
+- After registration, a verification email is sent with an encrypted link pointing to the frontend.
+- The frontend should capture `uid` and `token` from the query string and call the backend verification endpoint.
+- **URL (Backend)**: `/api/users/email-verify/` (GET)
+- **Query Params**: `uid`, `token`
+- Legacy path-based endpoint (also supported): `/api/users/email-verify/<uidb64>/<token>/`
+- **Success Response (200 OK)**:
+```json
+{
+  "message": "Email verified successfully!",
+  "detail": "Your account has been activated and email verified."
+}
+```
 
 ## Address Management
 
@@ -405,6 +575,7 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
 * **URL**: `/api/categories/`
 * **Method**: `GET`
 * **Authentication Required**: No (for listing), Yes (for creating)
+* **Description**: Returns all categories ordered by display_order first, then by name
 * **Data Constraints (for POST request):**
 ```json
 
@@ -412,7 +583,8 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
   "category_id": "[unique category id]",
   "name": "[category name]",
   "description": "[category description]",
-  "image": "[upload image file]"
+  "image": "[upload image file]",
+  "display_order": "[optional: number 1-8 for ordering]"
 }
 
 
@@ -427,7 +599,9 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
     "name": "Electronics",
     "description": "Gadgets and more",
     "tags": ["Smartphone", "Laptop", "Tablet"],
-    "image": "url_to_image"
+    "image": "url_to_image",
+    "display_order": 1,
+    "available_display_orders": [2, 3, 4, 5, 6, 7, 8]
   }
 ]
 
@@ -440,7 +614,9 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
   "name": "Books",
   "description": "Read more",
   "tags": ["Fiction", "Non-Fiction"],
-  "image": "url_to_newly_uploaded_image"
+  "image": "url_to_newly_uploaded_image",
+  "display_order": 2,
+  "available_display_orders": [3, 4, 5, 6, 7, 8]
 }
 
 ```
@@ -449,6 +625,54 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
 ```json
 {
   "error": "Permissions required"
+}
+```
+
+### Ordered Category List
+
+* **URL**: `/api/categories/ordered/`
+* **Method**: `GET`
+* **Authentication Required**: No
+* **Description**: Returns only categories with display_order set (1-8), ordered by display_order
+* **Note**: Maximum 8 categories can have display_order values
+
+### Success Response (Code: 200 OK)
+```json
+[
+  {
+    "category_id": "001",
+    "name": "Electronics",
+    "description": "Gadgets and more",
+    "tags": ["Smartphone", "Laptop", "Tablet"],
+    "image": "url_to_image",
+    "display_order": 1,
+    "available_display_orders": [3, 4, 5, 6, 7, 8]
+  },
+  {
+    "category_id": "002",
+    "name": "Books",
+    "description": "Read more",
+    "tags": ["Fiction", "Non-Fiction"],
+    "image": "url_to_image",
+    "display_order": 2,
+    "available_display_orders": [3, 4, 5, 6, 7, 8]
+  }
+]
+```
+
+### Available Display Orders
+
+* **URL**: `/api/categories/available-orders/`
+* **Method**: `GET`
+* **Authentication Required**: No
+* **Description**: Returns available display order numbers and usage statistics
+
+### Success Response (Code: 200 OK)
+```json
+{
+  "available_orders": [3, 4, 5, 6, 7, 8],
+  "total_slots": 8,
+  "used_slots": 2
 }
 ```
 
@@ -467,7 +691,8 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
   "name": "[new category name]",
   "description": "[new category description]",
   "tags": ["Updated", "Tags"],
-  "image": "[new image or keep existing]"
+  "image": "[new image or keep existing]",
+  "display_order": "[optional: number 1-8 for ordering]"
 }
 
 
@@ -481,7 +706,9 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
   "name": "Electronics",
   "description": "Gadgets and more updated",
   "tags": ["Smartphone", "Laptop", "Tablet"],
-  "image": "url_to_updated_image"
+  "image": "url_to_updated_image",
+  "display_order": 1,
+  "available_display_orders": [2, 3, 4, 5, 6, 7, 8]
 }
 
 
@@ -494,7 +721,9 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
   "name": "Updated Category Name",
   "description": "Updated description here",
   "tags": ["Updated", "Tags"],
-  "image": "url_to_updated_image"
+  "image": "url_to_updated_image",
+  "display_order": 2,
+  "available_display_orders": [3, 4, 5, 6, 7, 8]
 }
 
 ```
@@ -507,6 +736,20 @@ This API uses JWT (JSON Web Tokens) for authentication. To access protected endp
 ```json
 {
   "error": "Invalid category ID or insufficient permissions"
+}
+```
+
+### Display Order Validation Errors:
+
+```json
+{
+  "display_order": ["Display order must be between 1 and 8."]
+}
+```
+
+```json
+{
+  "display_order": ["A category with this display order already exists."]
 }
 ```
 
@@ -577,7 +820,7 @@ Authorization: Bearer [access_token]
 
 ## Confirm Password Reset
 
-### Request Password Reset
+- This endpoint supports both traditional Django tokens and encrypted tokens sent via email. If using the encrypted link, the frontend will call this endpoint with uid and token as query parameters.
 - **URL**: `/api/users/password_reset/confirm/`
 - **Method**: `POST`
 - **Auth Required**: No
@@ -586,11 +829,13 @@ Authorization: Bearer [access_token]
 ```json
 {
   "uid": "base64-encoded-user-id",
-  "token": "password-reset-token",
+  "token": "encrypted-or-django-token",
   "new_password": "newpassword123",
   "re_new_password": "newpassword123"
 }
 ```
+
+- You may also pass uid and token via query string: `/api/users/password_reset/confirm/?uid=<uid>&token=<token>`
 
 ### Success Response  (Code: 200 OK)
 
@@ -1953,6 +2198,573 @@ The Orders module is a core part of the MyEcommerce backend. It manages the comp
 }
 ```
 
+# Analytics API Documentation
+
+## Overview
+The Analytics module provides comprehensive data collection and reporting capabilities for the e-commerce platform. It automatically tracks user activities, order patterns, search behaviors, and detailed API events to provide valuable business insights.
+
+## Features
+- **Automatic Data Collection**: User activities, orders, searches, and API events are automatically tracked via Django signals and middleware
+- **User Activity Tracking**: Login/logout events, page views, and user engagement metrics
+- **Order Analytics**: Order creation, completion, and cancellation tracking with revenue metrics
+- **Search Analytics**: Search queries, results, and user search patterns
+- **Enhanced API Event Tracking**: Comprehensive API request/response monitoring with user context, error tracking, and performance metrics
+- **Advanced Analytics Models**: Sales metrics, product analytics, conversion funnels, cart abandonment analytics, and customer lifetime value tracking
+- **Admin Dashboard**: Enhanced admin interface with advanced filtering, searching, and analytics visualization
+- **Real-time Monitoring**: Live API performance monitoring and error tracking through middleware
+- **Security Auditing**: IP address tracking, user agent logging, and session monitoring for security analysis
+- **Performance Monitoring**: Request/response size tracking, response time analysis, and performance indicators
+
+## Admin Interface Security and Permissions
+
+All analytics models implement strict security measures:
+
+### Read-Only Analytics Data
+- **No Add Permissions**: All analytics admin interfaces disable add functionality (`has_add_permission` returns `False`)
+- **Automatic Data Generation**: Analytics data is generated automatically through signals, middleware, and background processes
+- **Data Integrity**: Prevents manual data manipulation that could compromise analytics accuracy
+
+### Enhanced Security Features
+- **IP Address Tracking**: All user activities and API events include IP address logging
+- **Session Monitoring**: Session IDs tracked for user journey analysis
+- **User Agent Logging**: Browser and device information captured for security analysis
+- **Error Tracking**: Comprehensive error logging with stack traces for debugging
+
+### Performance Monitoring
+- **Response Time Tracking**: All API requests monitored for performance
+- **Request/Response Size Monitoring**: Data transfer metrics for optimization
+- **Performance Indicators**: Visual indicators for fast/slow/critical response times
+- **Endpoint Analysis**: Built-in tools for analyzing API endpoint performance
+
+## Enhanced Analytics Models
+
+The analytics system now includes advanced models for comprehensive business intelligence:
+
+### Order Analytics
+- **Model**: `OrderAnalytics`
+- **Purpose**: Track daily order metrics and revenue performance
+- **Key Fields**: `date`, `total_orders`, `total_revenue`, `avg_order_value`, `shipping_revenue`
+- **Admin Access**: Read-only access in Django admin under Analytics section
+- **Permissions**: No add/edit permissions - data generated automatically
+
+### User Activity Log
+- **Model**: `UserActivityLog`
+- **Purpose**: Track user interactions and behavior patterns
+- **Key Fields**: `user`, `activity_type`, `timestamp`, `ip_address`, `details`
+- **Admin Access**: Read-only with detailed view links
+- **Permissions**: No add/edit/delete permissions - data captured automatically
+- **Features**: Advanced filtering by activity type, user, and timestamp
+
+### Search Analytics
+- **Model**: `SearchAnalytics`
+- **Purpose**: Monitor search queries and user search behavior
+- **Key Fields**: `query`, `user`, `timestamp`, `results_count`, `category`
+- **Admin Access**: Read-only access with search and filtering capabilities
+- **Permissions**: No add permissions - data captured automatically
+
+### Error Log
+- **Model**: `ErrorLog`
+- **Purpose**: Track system errors and debugging information
+- **Key Fields**: `timestamp`, `endpoint`, `error_message`, `stack_trace`, `user`
+- **Admin Access**: Read-only with error preview functionality
+- **Permissions**: No add/delete permissions - errors logged automatically
+- **Features**: Error message preview, endpoint filtering, user tracking
+
+### Sales Metrics
+- **Model**: `SalesMetrics`
+- **Purpose**: Track daily, weekly, and monthly sales performance
+- **Key Fields**: `date`, `total_visitors`, `unique_visitors`, `conversion_rate`, `cart_abandonment_rate`, `new_customers`, `returning_customers`, `customer_acquisition_cost`
+- **Admin Access**: Read-only with formatted display of rates and costs
+- **Permissions**: No add permissions - metrics calculated automatically
+- **Features**: Date hierarchy navigation, conversion rate formatting
+
+### Product Analytics
+- **Model**: `ProductAnalytics`
+- **Purpose**: Monitor individual product performance and trends
+- **Key Fields**: `product`, `date`, `views`, `cart_additions`, `purchases`, `revenue`, `conversion_rate`, `cart_to_purchase_rate`
+- **Admin Access**: Read-only with product search and category filtering
+- **Permissions**: No add permissions - analytics generated automatically
+- **Features**: Revenue formatting, conversion rate calculations, product name display
+
+### Conversion Funnel
+- **Model**: `ConversionFunnel`
+- **Purpose**: Track user journey from view to purchase
+- **Key Fields**: `user`, `session_id`, `stage`, `product`, `timestamp`, `metadata`
+- **Admin Access**: Read-only with stage badges and user/product filtering
+- **Permissions**: No add permissions - funnel data captured automatically
+- **Features**: Stage visualization, user and product name display, session tracking
+
+### Cart Abandonment Analytics
+- **Model**: `CartAbandonmentAnalytics`
+- **Purpose**: Analyze cart abandonment patterns and recovery opportunities
+- **Key Fields**: `user`, `session_id`, `cart_created`, `cart_abandoned`, `cart_value`, `items_count`, `abandonment_stage`, `recovery_email_sent`, `recovered`, `recovery_date`
+- **Admin Access**: Read-only with recovery status tracking
+- **Permissions**: No add permissions - abandonment data tracked automatically
+- **Features**: Cart value formatting, recovery status badges, abandonment stage filtering
+
+### Customer Lifetime Value
+- **Model**: `CustomerLifetimeValue`
+- **Purpose**: Calculate and track customer value over time
+- **Key Fields**: `user`, `total_orders`, `total_spent`, `avg_order_value`, `first_order_date`, `last_order_date`, `predicted_ltv`, `customer_segment`, `last_updated`
+- **Admin Access**: Read-only with customer segmentation and value formatting
+- **Permissions**: No add permissions - LTV calculated automatically
+- **Features**: Customer segment badges, monetary value formatting, order date tracking
+
+## API Event Tracking
+
+The system now includes comprehensive API event tracking through the `APITrackingMiddleware`:
+
+### Enhanced APIEvent Model
+The `APIEvent` model has been significantly enhanced with the following fields:
+- **User Information**: `user` (linked to authenticated users)
+- **Request Details**: `ip_address`, `user_agent`, `request_method`, `request_data`
+- **Response Details**: `response_status_code`, `error_message`
+- **Session Tracking**: `session_id`, `referer`
+- **Performance Metrics**: `request_size`, `response_size`
+- **Debugging Data**: Comprehensive error tracking and request/response logging
+
+### Middleware Features
+- **Automatic Tracking**: All API requests are automatically logged
+- **User Context**: Associates API calls with authenticated users
+- **Error Handling**: Captures and logs API errors with detailed context
+- **Performance Monitoring**: Tracks request/response sizes and timing
+- **Data Sanitization**: Removes sensitive information from logged data
+- **Security Auditing**: IP address and user agent tracking for security analysis
+
+### Admin Interface Enhancements
+The `APIEventAdmin` has been enhanced with:
+- **Advanced Filtering**: Filter by status, request method, response status code, timestamp, endpoint, and user
+- **Enhanced Search**: Search across endpoints, usernames, emails, IP addresses, error messages, and user agents
+- **User Pattern Analysis**: Built-in actions to analyze endpoint performance and user patterns
+- **Organized Display**: Fieldsets for basic info, user details, request data, and response data
+- **Read-only Fields**: All fields are read-only to prevent accidental modifications
+- **Custom Methods**: 
+  - `get_status_badge()`: Color-coded status indicators
+  - `get_response_time()`: Formatted response time with performance indicators
+  - `get_performance_indicator()`: Visual performance status (Fast/Slow/Critical)
+  - `get_user_info()`: Formatted user display with username and email
+  - `get_ip_address()`: Formatted IP address display
+- **Performance Features**: Response time analysis, performance indicators, endpoint performance analysis
+- **Security Features**: IP address tracking, user agent logging, session tracking
+- **Permissions**: No add/delete permissions - events logged automatically via middleware
+
+## Endpoints
+
+### API Events Analytics
+- **URL**: `/api/analytics/api-events/`
+- **Method**: `GET`
+- **Auth Required**: Yes (Admin only)
+- **Description**: Retrieve comprehensive API event analytics
+- **Query Parameters**:
+  - `start_date`: Filter by start date (YYYY-MM-DD format, optional)
+  - `end_date`: Filter by end date (YYYY-MM-DD format, optional)
+  - `user_id`: Filter by specific user ID (optional)
+  - `endpoint`: Filter by API endpoint (optional)
+  - `status_code`: Filter by HTTP status code (optional)
+  - `ip_address`: Filter by IP address (optional)
+
+### Success Response (200 OK):
+```json
+{
+    "count": 150,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "endpoint": "/api/products/",
+            "method": "GET",
+            "status": "success",
+            "status_code": 200,
+            "response_time": 0.15,
+            "timestamp": "2024-03-22T10:00:00Z",
+            "user": {
+                "id": 1,
+                "username": "testuser",
+                "email": "test@example.com"
+            },
+            "ip_address": "192.168.1.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "request_size": 1024,
+            "response_size": 2048,
+            "session_id": "abc123def456",
+            "referer": "https://example.com/products",
+            "request_data": "{\"page\": 1, \"limit\": 10}",
+            "error_message": null
+        },
+        {
+            "id": 2,
+            "endpoint": "/api/orders/",
+            "method": "POST",
+            "status": "error",
+            "status_code": 400,
+            "response_time": 0.25,
+            "timestamp": "2024-03-22T10:05:00Z",
+            "user": {
+                "id": 2,
+                "username": "customer2",
+                "email": "customer2@example.com"
+            },
+            "ip_address": "192.168.1.2",
+            "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)",
+            "request_size": 2048,
+            "response_size": 512,
+            "session_id": "def456ghi789",
+            "referer": "https://example.com/checkout",
+            "request_data": "{\"items\": [], \"shipping_address\": {}}",
+            "error_message": "Invalid shipping address format"
+        }
+    ]
+}
+```
+
+## Enhanced Order Export Functionality
+
+### Order Admin Export Features
+The Order admin interface has been enhanced with comprehensive export capabilities:
+
+#### CSV Export
+- **Custom Action**: `export_orders_csv` action available in order list view
+- **Comprehensive Fields**: Exports detailed order information including:
+  - Basic order details (order number, status, dates)
+  - User information (username, email, phone)
+  - Payment details (status, method, transaction ID)
+  - Shipping information (addresses, carrier, costs, tracking)
+  - Order items with product details and quantities
+  - Calculated metrics (total weight, item count)
+- **Filename**: `orders_comprehensive_export_YYYY-MM-DD.csv`
+
+#### Excel Export (Import/Export Integration)
+- **Multiple Formats**: Supports CSV, XLS, and XLSX formats
+- **Resource Class**: `OrderResource` with enhanced field mapping
+- **Additional Fields**: 
+  - `user_phone`: Customer phone number
+  - `shipping_address_line2`: Secondary address line
+  - `order_items_count`: Total number of items
+  - `order_items_details`: Detailed item breakdown
+  - `total_weight`: Calculated total weight
+  - `razorpay_order_id`: Payment gateway reference
+
+#### Export Field Mapping
+```python
+# OrderResource fields include:
+fields = (
+    'id', 'order_number', 'user__username', 'user__email', 'user_phone',
+    'status', 'payment_status', 'payment_method', 'razorpay_order_id',
+    'total_price', 'shipping_cost', 'created_at', 'updated_at',
+    'shipping_name', 'shipping_address_line1', 'shipping_address_line2',
+    'shipping_city', 'shipping_state', 'shipping_postal_code',
+    'shipping_country', 'carrier', 'tracking_number',
+    'estimated_delivery_date', 'order_items_count',
+    'order_items_details', 'total_weight'
+)
+```
+
+#### Dehydrate Methods
+Custom data extraction methods for complex fields:
+- `dehydrate_shipping_address_line2`: Extracts secondary address line
+- `dehydrate_order_items_count`: Counts total order items
+- `dehydrate_order_items_details`: Formats item details as readable string
+- `dehydrate_total_weight`: Calculates total weight from all items
+
+### Admin Interface Enhancements
+- **Import/Export Templates**: Custom templates for import/export operations
+- **Pagination**: 25 orders per page for better performance
+- **Date Hierarchy**: Date-based navigation for order filtering
+- **Enhanced Filtering**: Filter by status, payment status, creation date, and carrier
+- **Search Functionality**: Search by order number, username, and email
+- **Inline Order Items**: View and manage order items directly within order admin
+
+### User Activity Analytics
+- **URL**: `/api/analytics/user-activity/`
+- **Method**: `GET`
+- **Auth Required**: Yes (Admin only)
+- **Description**: Retrieve user activity analytics data
+- **Query Parameters**:
+  - `start_date`: Filter by start date (YYYY-MM-DD format, optional)
+  - `end_date`: Filter by end date (YYYY-MM-DD format, optional)
+  - `user_id`: Filter by specific user ID (optional)
+  - `activity_type`: Filter by activity type (LOGIN, LOGOUT, PAGE_VIEW, optional)
+
+### Success Response (200 OK):
+```json
+{
+    "count": 25,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "user": {
+                "id": 1,
+                "username": "testuser",
+                "email": "test@example.com"
+            },
+            "activity_type": "LOGIN",
+            "timestamp": "2024-03-22T10:00:00Z",
+            "ip_address": "192.168.1.1",
+            "user_agent": "Mozilla/5.0...",
+            "additional_data": {}
+        }
+    ]
+}
+```
+
+### Order Analytics
+- **URL**: `/api/analytics/orders/`
+- **Method**: `GET`
+- **Auth Required**: Yes (Admin only)
+- **Description**: Retrieve order analytics data
+- **Query Parameters**:
+  - `start_date`: Filter by start date (YYYY-MM-DD format, optional)
+  - `end_date`: Filter by end date (YYYY-MM-DD format, optional)
+  - `user_id`: Filter by specific user ID (optional)
+  - `event_type`: Filter by event type (ORDER_CREATED, ORDER_COMPLETED, ORDER_CANCELLED, optional)
+
+### Success Response (200 OK):
+```json
+{
+    "count": 15,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "user": {
+                "id": 1,
+                "username": "testuser",
+                "email": "test@example.com"
+            },
+            "order": {
+                "order_number": "ORD-12345678",
+                "total_price": "1500.00",
+                "status": "COMPLETED"
+            },
+            "event_type": "ORDER_COMPLETED",
+            "timestamp": "2024-03-22T10:30:00Z",
+            "order_value": "1500.00",
+            "additional_data": {
+                "payment_method": "card",
+                "items_count": 3
+            }
+        }
+    ]
+}
+```
+
+### Search Analytics
+- **URL**: `/api/analytics/searches/`
+- **Method**: `GET`
+- **Auth Required**: Yes (Admin only)
+- **Description**: Retrieve search analytics data
+- **Query Parameters**:
+  - `start_date`: Filter by start date (YYYY-MM-DD format, optional)
+  - `end_date`: Filter by end date (YYYY-MM-DD format, optional)
+  - `user_id`: Filter by specific user ID (optional)
+  - `query`: Filter by search query (optional)
+
+### Success Response (200 OK):
+```json
+{
+    "count": 30,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "user": {
+                "id": 1,
+                "username": "testuser",
+                "email": "test@example.com"
+            },
+            "query": "smartphone",
+            "timestamp": "2024-03-22T10:15:00Z",
+            "results_count": 5,
+            "additional_data": {
+                "search_type": "product",
+                "filters_applied": ["category", "price_range"]
+            }
+        }
+    ]
+}
+```
+
+### Enhanced Analytics Summary
+- **URL**: `/api/analytics/summary/`
+- **Method**: `GET`
+- **Auth Required**: Yes (Admin only)
+- **Description**: Get comprehensive aggregated analytics summary including API performance metrics
+- **Query Parameters**:
+  - `period`: Time period for summary (day, week, month, year, optional, defaults to month)
+
+### Success Response (200 OK):
+```json
+{
+    "period": "month",
+    "start_date": "2024-03-01",
+    "end_date": "2024-03-31",
+    "user_activities": {
+        "total_logins": 150,
+        "unique_users": 45,
+        "page_views": 1200
+    },
+    "orders": {
+        "total_orders": 25,
+        "completed_orders": 20,
+        "cancelled_orders": 2,
+        "total_revenue": "45000.00",
+        "average_order_value": "1800.00"
+    },
+    "searches": {
+        "total_searches": 300,
+        "unique_queries": 180,
+        "average_results_per_search": 4.2,
+        "top_search_terms": [
+            {"query": "smartphone", "count": 45},
+            {"query": "laptop", "count": 32},
+            {"query": "headphones", "count": 28}
+        ]
+    },
+    "api_performance": {
+        "total_requests": 5000,
+        "success_rate": 98.5,
+        "average_response_time": 0.25,
+        "error_rate": 1.5,
+        "top_endpoints": [
+            {"endpoint": "/api/products/", "requests": 1200},
+            {"endpoint": "/api/cart/", "requests": 800},
+            {"endpoint": "/api/orders/", "requests": 600}
+        ],
+        "error_breakdown": {
+            "4xx_errors": 50,
+            "5xx_errors": 25
+        }
+    },
+    "sales_metrics": {
+        "conversion_rate": 3.2,
+        "cart_abandonment_rate": 68.5,
+        "average_customer_lifetime_value": "2500.00"
+    }
+}
+```
+
+### Error Responses
+
+#### 401 Unauthorized:
+```json
+{
+    "detail": "Authentication credentials were not provided."
+}
+```
+
+#### 403 Forbidden:
+```json
+{
+    "detail": "You do not have permission to perform this action."
+}
+```
+
+#### 400 Bad Request:
+```json
+{
+    "error": "Invalid date format. Use YYYY-MM-DD."
+}
+```
+
+## Data Collection
+
+The enhanced analytics system automatically collects data through multiple mechanisms:
+
+### Django Signals
+- **User Activities**: Triggered on user login/logout and can be manually triggered for page views
+- **Order Events**: Automatically tracked when orders are created, completed, or cancelled
+- **Search Events**: Captured when users perform searches through the unified search API
+
+### Middleware Integration
+- **API Event Tracking**: The `APITrackingMiddleware` automatically captures all API requests and responses
+- **Real-time Monitoring**: Live tracking of API performance, errors, and user behavior
+- **Security Auditing**: Automatic logging of IP addresses, user agents, and session information
+- **Error Tracking**: Comprehensive error logging with context and debugging information
+
+### Enhanced Data Points
+- **User Context**: All events are linked to authenticated users when available
+- **Performance Metrics**: Request/response times, data sizes, and throughput measurements
+- **Error Analysis**: Detailed error messages, stack traces, and failure patterns
+- **Business Intelligence**: Sales metrics, conversion funnels, and customer lifetime value calculations
+
+## Enhanced Admin Interface
+
+All analytics data can be viewed and managed through the enhanced Django admin interface:
+
+### Core Analytics
+- `/admin/analytics/useractivity/` - User activity logs with enhanced filtering
+- `/admin/analytics/orderanalytics/` - Order analytics with revenue tracking
+- `/admin/analytics/searchanalytics/` - Search analytics with pattern analysis
+
+### Enhanced Analytics Models
+- `/admin/core/salesmetrics/` - Sales performance metrics and trends
+- `/admin/core/productanalytics/` - Product-specific analytics and insights
+- `/admin/core/conversionfunnel/` - Conversion funnel analysis
+- `/admin/core/cartabandonmentanalytics/` - Cart abandonment tracking
+- `/admin/core/customerlifetimevalue/` - Customer value analytics
+
+### API Event Monitoring
+- `/admin/analytics/apievent/` - Comprehensive API event tracking with:
+  - Advanced filtering by user, endpoint, status code, and date ranges
+  - Search functionality across all relevant fields
+  - User pattern analysis tools
+  - Error tracking and debugging capabilities
+  - Performance monitoring and optimization insights
+
+### Admin Features
+- **Enhanced Filtering**: Multi-field filtering for precise data analysis
+- **Advanced Search**: Full-text search across all analytics data
+- **User Pattern Analysis**: Built-in tools to analyze user behavior patterns
+- **Export Capabilities**: Export analytics data for external analysis
+- **Real-time Updates**: Live data updates for monitoring active systems
+- **Security Auditing**: IP tracking and session analysis for security monitoring
+
+## Middleware Configuration
+
+The analytics system includes the `APITrackingMiddleware` which has been integrated into the Django middleware stack:
+
+### Middleware Setup
+```python
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'analytics.middleware.APITrackingMiddleware',  # Added for comprehensive API tracking
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+```
+
+### Middleware Features
+- **Automatic API Tracking**: Captures all API requests and responses
+- **User Association**: Links API events to authenticated users
+- **Error Handling**: Comprehensive error tracking and logging
+- **Performance Monitoring**: Request/response time and size tracking
+- **Security Auditing**: IP address and user agent logging
+- **Data Sanitization**: Removes sensitive data from logs
+
+## Database Migrations
+
+The enhanced analytics system includes new database migrations:
+
+### APIEvent Model Enhancements
+- **Migration**: `0004_apievent_error_message_apievent_ip_address_and_more.py`
+- **New Fields**: `user`, `ip_address`, `user_agent`, `request_method`, `request_data`, `response_status_code`, `error_message`, `session_id`, `referer`, `request_size`, `response_size`
+- **New Indexes**: Optimized indexes for `timestamp`/`status`, `user`/`timestamp`, `endpoint`/`status`, and `ip_address`/`timestamp`
+
+### Performance Optimizations
+- **Database Indexes**: Strategic indexes for improved query performance
+- **Query Optimization**: Efficient data retrieval for analytics dashboards
+- **Data Retention**: Configurable data retention policies for large datasets
+
 ## Critical E-commerce Configuration Issues
 
 The following issues have been identified in the project configuration (primarily in `settings.py`):
@@ -1962,5 +2774,7 @@ The following issues have been identified in the project configuration (primaril
 - **Placeholder API Keys**: Razorpay and Shiprocket use dummy keys as defaults, which need to be replaced with actual credentials for live operations.
 - **Email Configuration**: Set to Gmail SMTP with commented-out alternatives (e.g., GoDaddy); ensure proper setup for production email sending.
 - **Commented-out Production Settings**: Security features like SECURE_SSL_REDIRECT, SESSION_COOKIE_SECURE, and AWS S3 storage are commented out and need enabling for production.
+- **Analytics Data Privacy**: Ensure compliance with data protection regulations when collecting user analytics data.
+- **API Rate Limiting**: Consider implementing rate limiting to prevent abuse of the enhanced API tracking system.
 
 Address these before deploying to production to ensure security and functionality.

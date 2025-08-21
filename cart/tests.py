@@ -8,8 +8,19 @@ from users.models import CustomUser
 from products.models import Product, PriceWeight, Category
 from cart.models import Cart, CartItem
 from decimal import Decimal
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
+import io
 
 class CartAPITestCase(TestCase):
+    def create_test_image(self):
+        """Create a test image for category creation"""
+        image = Image.new('RGB', (100, 100), color='red')
+        image_io = io.BytesIO()
+        image.save(image_io, format='JPEG')
+        image_io.seek(0)
+        return SimpleUploadedFile('test_image.jpg', image_io.getvalue(), content_type='image/jpeg')
+    
     def setUp(self):
         # Initialize APIClient
         self.client = APIClient()
@@ -20,6 +31,9 @@ class CartAPITestCase(TestCase):
             password='testpassword',
             email='testuser@example.com'
         )
+        # Set user as email verified for testing
+        self.user.is_email_verified = True
+        self.user.save()
         
         # Authenticate the client using JWT
         response = self.client.post(
@@ -28,10 +42,17 @@ class CartAPITestCase(TestCase):
             format='json'
         )
         self.access_token = response.data.get('access')
-        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+        if self.access_token:
+            self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+        else:
+            self.fail(f"Failed to obtain access token. Response: {response.data}")
         
         # Create a category
-        self.category = Category.objects.create(name='Electronics')
+        self.category = Category.objects.create(
+            name='Electronics',
+            description='Electronic devices and gadgets',
+            image=self.create_test_image()
+        )
         
         # Create a product
         self.product = Product.objects.create(

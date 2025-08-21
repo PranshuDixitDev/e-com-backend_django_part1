@@ -7,6 +7,7 @@ from categories.models import Category
 from products.serializers import ProductSerializer
 from categories.serializers import CategorySerializer
 from django.db.models import Q
+from analytics.models import SearchAnalytics
 
 class UnifiedSearchAPIView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -45,6 +46,13 @@ class UnifiedSearchAPIView(APIView):
 
         # If there are no exact matches, return only suggestions
         if not products and not categories:
+            # Log search analytics for no results
+            SearchAnalytics.objects.create(
+                query=query,
+                user=request.user if request.user.is_authenticated else None,
+                results_count=0
+            )
+            
             if product_suggestions or category_suggestions:
                 return Response({
                     "message": "No exact match found, did you mean:",
@@ -54,6 +62,14 @@ class UnifiedSearchAPIView(APIView):
 
             return Response({"message": "No matches found."}, status=status.HTTP_404_NOT_FOUND)
 
+        # Log search analytics
+        total_results = len(products) + len(categories)
+        SearchAnalytics.objects.create(
+            query=query,
+            user=request.user if request.user.is_authenticated else None,
+            results_count=total_results
+        )
+        
         # If exact matches exist but you still want to show fuzzy suggestions
         return Response({
             "products": product_data,

@@ -8,6 +8,9 @@ from django.utils import timezone
 from unittest.mock import patch, Mock
 from django.contrib.auth import get_user_model
 import uuid
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
+from io import BytesIO
 
 from orders.models import Order, OrderItem
 from cart.models import Cart, CartItem
@@ -23,6 +26,18 @@ from django.db import transaction
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 class TestOrderLifecycle(TestCase):
+    def create_test_image(self, format='JPEG', size=(100, 100), color='blue'):
+        """Create a test image file for testing purposes."""
+        image = Image.new('RGB', size, color)
+        image_io = BytesIO()
+        image.save(image_io, format=format)
+        image_io.seek(0)
+        return SimpleUploadedFile(
+            name=f'test_image.{format.lower()}',
+            content=image_io.getvalue(),
+            content_type=f'image/{format.lower()}'
+        )
+
     def setUp(self):
         self.client = APIClient()
         self.user = CustomUser.objects.create_user(
@@ -45,7 +60,7 @@ class TestOrderLifecycle(TestCase):
         self.category = Category.objects.create(
             name='Electronics',
             description='Test Category',
-            image='dummy.jpg'
+            image=self.create_test_image()
         )
         self.product = Product.objects.create(
             name='Smartphone',
@@ -275,6 +290,18 @@ class TestOrderLifecycle(TestCase):
         self.assertEqual(order.shipping_cost, Decimal('150.00'))
 
 class OrderProcessingTests(TestCase):
+    def create_test_image(self, format='JPEG', size=(100, 100), color='blue'):
+        """Create a test image for category."""
+        image = Image.new('RGB', size, color)
+        image_io = BytesIO()
+        image.save(image_io, format=format)
+        image_io.seek(0)
+        return SimpleUploadedFile(
+            name=f'test_category.{format.lower()}',
+            content=image_io.getvalue(),
+            content_type=f'image/{format.lower()}'
+        )
+    
     def setUp(self):
         # Create a test user.
         User = get_user_model()
@@ -298,7 +325,8 @@ class OrderProcessingTests(TestCase):
         # Create a test category.
         self.category = Category.objects.create(
             name='Electronics',
-            description='Category for electronic products.'
+            description='Category for electronic products.',
+            image=self.create_test_image()
         )
         
         # Create a test product.
@@ -332,7 +360,11 @@ class OrderProcessingTests(TestCase):
 
     def create_test_product(self, initial_inventory=5):
         """Helper method to create a test product with inventory"""
-        category = Category.objects.create(name="Test Category")
+        category = Category.objects.create(
+            name="Test Category",
+            description="Test Category Description",
+            image=self.create_test_image()
+        )
         product = Product.objects.create(
             name="Test Product " + uuid.uuid4().hex[:6],
             description="Test Description",

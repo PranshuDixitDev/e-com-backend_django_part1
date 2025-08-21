@@ -17,4 +17,3 @@ class EmailVerificationTokenGenerator(PasswordResetTokenGenerator):
         )
 
 email_verification_token = EmailVerificationTokenGenerator()
-print("EmailVerificationTokenGenerator 000000:",email_verification_token)

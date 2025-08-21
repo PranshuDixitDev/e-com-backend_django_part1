@@ -1,12 +1,151 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Email Verification</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email - Gujju Masala</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        .message {
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #555;
+        }
+        .verify-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            transition: transform 0.2s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .verify-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .alternative-link {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .alternative-link p {
+            margin: 5px 0;
+        }
+        .alternative-link a {
+            color: #667eea;
+            word-break: break-all;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px 30px;
+            text-align: center;
+            font-size: 14px;
+            color: #6c757d;
+            border-top: 1px solid #e9ecef;
+        }
+        .security-note {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 14px;
+            color: #856404;
+        }
+        .expiry-info {
+            font-size: 14px;
+            color: #dc3545;
+            margin-top: 20px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-    <p>Hi {{ user.username }},</p>
-    <p>Thank you for registering. Please click the link below to verify your email address:</p>
-    <p><a href="{{ verification_link }}">Verify Email</a></p>
-    <p>If you did not register for this account, please ignore this email.</p>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to Gujju Masala!</h1>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                Hello {{ user.first_name|default:user.username }},
+            </div>
+            
+            <div class="message">
+                Thank you for joining Gujju Masala! We're excited to have you as part of our community. To complete your registration and start exploring our delicious offerings, please verify your email address.
+            </div>
+            
+            <div class="button-container">
+                <a href="{{ verification_link }}" class="verify-button">Verify My Email Address</a>
+            </div>
+            
+            <div class="expiry-info">
+                ⏰ This verification link will expire in 24 hours for security reasons.
+            </div>
+            
+            <div class="alternative-link">
+                <p><strong>Having trouble with the button?</strong></p>
+                <p>Copy and paste this link into your browser:</p>
+                <p><a href="{{ verification_link }}">{{ verification_link }}</a></p>
+            </div>
+            
+            <div class="security-note">
+                <strong>🔒 Security Notice:</strong> If you didn't create an account with Gujju Masala, please ignore this email. Your email address will not be added to our system without verification.
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>This email was sent from Gujju Masala. If you have any questions, please contact our support team.</p>
+            <p>&copy; {{ current_year|default:"2024" }} Gujju Masala. All rights reserved.</p>
+            <p style="margin-top: 15px; font-size: 12px; color: #999;">Powered by <a href="https://www.codingbullz.com" style="color: #667eea; text-decoration: none;">www.codingbullz.com</a></p>
+        </div>
+    </div>
 </body>
 </html>

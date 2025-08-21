@@ -194,13 +194,13 @@ class ShiprocketExtendedTests(TestCase):
         self.mock_response = Mock()
         self.mock_response.status_code = 200
 
-    @patch('shipping.shiprocket_api.requests.post')
-    def test_check_serviceability(self, mock_post):
+    @patch('shipping.shiprocket_api.requests.get')
+    def test_check_serviceability(self, mock_get):
         """Test serviceability check with pincode"""
         self.mock_response.json.return_value = {
             'data': {'available_courier_companies': []}
         }
-        mock_post.return_value = self.mock_response
+        mock_get.return_value = self.mock_response
 
         payload = {
             'pickup_postcode': '110001',
@@ -260,7 +260,7 @@ class ShiprocketExtendedTests(TestCase):
 
     def test_error_handling(self):
         """Test error handling for all shipping functions"""
-        with patch('shipping.shiprocket_api.requests.post') as mock_post:
-            mock_post.side_effect = Exception('API Error')
+        with patch('shipping.shiprocket_api.requests.get') as mock_get:
+            mock_get.side_effect = Exception('API Error')
             with self.assertRaises(Exception):
                 check_serviceability({'pickup_postcode': '110001'})

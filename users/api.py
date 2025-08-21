@@ -5,8 +5,10 @@ from django.db.models import Q
 from rest_framework import status, views
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from users.models import Address
 from .serializers import UserSerializer, AddressSerializer
+from .utils import send_verification_email
 from django.db import IntegrityError, transaction
 from django.utils.timezone import now
 from django.utils.decorators import method_decorator
@@ -30,19 +32,23 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.core.mail import EmailMultiAlternatives
 from functools import wraps
+import requests
 
-# Custom decorator that bypasses ratelimiting for tests
+logger = logging.getLogger(__name__)
 
-
-def maybe_ratelimit(*args, **kwargs):
+# Production-ready rate limiting decorator that respects test environment
+def production_ratelimit(*args, **kwargs):
+    """Rate limiting decorator that bypasses rate limiting during tests."""
     def decorator(func):
-        if getattr(settings, 'ENABLE_RATE_LIMIT', True):
-            return ratelimit(*args, **kwargs)(func)
-        else:
+        # Bypass rate limiting during tests
+        if getattr(settings, 'TESTING', False) or not getattr(settings, 'ENABLE_RATE_LIMIT', True):
             @wraps(func)
             def wrapped(request, *args, **kwargs):
                 return func(request, *args, **kwargs)
             return wrapped
+        else:
+            # Apply production rate limiting
+            return ratelimit(*args, **kwargs)(func)
     return decorator
 
 
@@ -52,14 +58,25 @@ User = get_user_model()
 class UserRegisterAPIView(views.APIView):
     permission_classes = [AllowAny]  # Allow unregistered users to access this view
 
-    @method_decorator(maybe_ratelimit(key='ip', rate='5/m', method='POST'))
+    @method_decorator(production_ratelimit(key='ip', rate='3/m', method='POST'))
     def post(self, request):
         with transaction.atomic():
             serializer = UserSerializer(data=request.data)
             if serializer.is_valid():
                 try:
                     user = serializer.save()
-                    self.send_verification_email(user)
+                    # make inactive + (if present) unverified
+                    fields = []
+                    if getattr(user, "is_active", None) is not False:
+                        user.is_active = False
+                        fields.append("is_active")
+                    if hasattr(user, "is_email_verified"):
+                        user.is_email_verified = False
+                        fields.append("is_email_verified")
+                    if fields:
+                        user.save(update_fields=fields)
+                    
+                    send_verification_email(user)
                     return Response(serializer.data, status=status.HTTP_201_CREATED)
                 except IntegrityError as e:
                     # Enhanced error handling for a better user experience
@@ -68,54 +85,34 @@ class UserRegisterAPIView(views.APIView):
                     return Response({"error": str(e)}, status=status.HTTP_409_CONFLICT)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-
-    def send_verification_email(self, user):
-        token = email_verification_token.make_token(user)
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
-        verification_url = reverse('email-verify', kwargs={'uidb64': uid, 'token': token})
-        verification_link = f"http://127.0.0.1:8000{verification_url}"
-
-        # Check if template is found
-        from django.template.loader import get_template, TemplateDoesNotExist
-
-        try:
-            template = get_template('email_verification.html')
-            print("Template found")
-        except TemplateDoesNotExist:
-            print("Template not found")
-
-        html_content = render_to_string('email_verification.html', {'user': user, 'verification_link': verification_link})
-
-        email = EmailMultiAlternatives(
-            subject='Email Verification',
-            body=f'Please verify your email by clicking on the following link: {verification_link}',
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        email.attach_alternative(html_content, "text/html")
-        email.send()
-
+    
 class UserLoginAPIView(views.APIView):
     permission_classes = [AllowAny]  # Allow unregistered users to access this view
 
-    @method_decorator(ratelimit(key='ip', rate='10/m'))
+    @method_decorator(production_ratelimit(key='ip', rate='5/m', method='POST'))
     def post(self, request):
         login = request.data.get('login')
         password = request.data.get('password')
-        user = User.objects.filter(Q(username=login) | Q(phone_number=login)).first()
-        if user and user.check_password(password):
-             # Update last_login on successful login
-            user.last_login = now()
-            user.save(update_fields=['last_login'])
-             # Generate JWT tokens
-            refresh = RefreshToken.for_user(user)
-            return Response({
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }, status=status.HTTP_200_OK)
-         # Log failed attempt with IP and timestamp
-        logging.warning(f"Failed login attempt for user {login} from IP {request.META['REMOTE_ADDR']} at {now()}")
-        return Response({"error": "Invalid Credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        user = User.objects.filter(Q(username=login) | Q(phone_number=login) | Q(email=login)).first()
+        if not user or not user.check_password(password):
+            # Log failed attempt with IP and timestamp
+            logging.warning(f"Failed login attempt for user {login} from IP {request.META.get('REMOTE_ADDR', 'unknown')} at {now()}")
+            return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not user.is_active or (hasattr(user, "is_email_verified") and not user.is_email_verified):
+            return Response({"error": "Please verify your email before logging in."}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Update last_login on successful login
+        user.last_login = now()
+        user.save(update_fields=['last_login'])
+        
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }, status=status.HTTP_200_OK)
 
 
 class LogoutAPIView(views.APIView):
@@ -124,13 +121,52 @@ class LogoutAPIView(views.APIView):
     def post(self, request):
         try:
             refresh_token = request.data.get("refresh")
-            token = RefreshToken(refresh_token)
+            
+            if not refresh_token:
+                return Response(
+                    {
+                        "error": "Refresh token is required",
+                        "detail": "Please provide a valid refresh token to logout."
+                    }, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             # Attempt to blacklist the given token
+            token = RefreshToken(refresh_token)
             token.blacklist()
-            # Optionally, invalidate all tokens for this user by updating a user-specific field (not shown here)
-            return Response({"success": "Logged out successfully"}, status=status.HTTP_205_RESET_CONTENT)
+            
+            return Response(
+                {
+                    "success": "Logged out successfully",
+                    "detail": "Your session has been terminated and tokens have been invalidated."
+                }, 
+                status=status.HTTP_205_RESET_CONTENT
+            )
+            
+        except TokenError as e:
+            return Response(
+                {
+                    "error": "Token is invalid or already blacklisted",
+                    "detail": "The provided refresh token is either malformed, expired, or already blacklisted."
+                }, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        except InvalidToken as e:
+            return Response(
+                {
+                    "error": "Invalid token format",
+                    "detail": "The provided token is not in the correct format."
+                }, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "error": "Logout failed",
+                    "detail": f"An unexpected error occurred during logout: {str(e)}"
+                }, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class UserProfileAPIView(views.APIView):
@@ -174,12 +210,20 @@ class UserProfileAPIView(views.APIView):
 class CustomPasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
 
+    @method_decorator(production_ratelimit(key='ip', rate='2/m', method='POST'))
     def post(self, request, uidb64, token):
         try:
             uid = urlsafe_base64_decode(uidb64).decode()
             user = get_user_model().objects.get(pk=uid)
         except (TypeError, ValueError, OverflowError, get_user_model().DoesNotExist) as e:
             return Response({"error": "Invalid link: " + str(e)}, status=400)
+        
+        # Check if user is active and email is verified
+        if not user.is_active:
+            return Response({"error": "User account is inactive"}, status=400)
+        
+        if not user.is_email_verified:
+            return Response({"error": "Email must be verified before password reset"}, status=400)
 
         if user is not None and custom_token_generator.check_token(user, token):
             form = SetPasswordForm(user, request.data)
@@ -236,8 +280,58 @@ class VerifyEmail(APIView):
             user = None
 
         if user is not None and email_verification_token.check_token(user, token):
-            user.is_active = True
-            user.save()
+            updates = []
+            if not user.is_active:
+                user.is_active = True
+                updates.append("is_active")
+            if hasattr(user, "is_email_verified") and not user.is_email_verified:
+                user.is_email_verified = True
+                updates.append("is_email_verified")
+            if updates:
+                user.save(update_fields=updates)
+                # Send admin notification after successful email verification
+                self._send_admin_notification(user)
             return Response({'message': 'Email verified successfully!'}, status=status.HTTP_200_OK)
         else:
             return Response({'error': 'Invalid token or user ID'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def _send_admin_notification(self, user):
+        """Send notification to admin panel about successful email verification."""
+        try:
+            # Prepare notification data
+            notification_data = {
+                'event_type': 'email_verification',
+                'user_id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'full_name': user.get_full_name() or 'N/A',
+                'verification_timestamp': user.date_joined.isoformat() if user.date_joined else None,
+                'message': f'User {user.username} ({user.email}) has successfully verified their email address.'
+            }
+            
+            # Log the notification locally
+            logger.info(f"Email verification notification: User {user.username} ({user.email}) verified their email")
+            
+            # If there's an admin notification endpoint configured, send POST request
+            admin_notification_url = getattr(settings, 'ADMIN_NOTIFICATION_URL', None)
+            if admin_notification_url:
+                # Prepare secure headers with internal service token
+                headers = {
+                    'Content-Type': 'application/json',
+                    'X-INTERNAL-TOKEN': getattr(settings, 'INTERNAL_SERVICE_TOKEN', '')
+                }
+                
+                response = requests.post(
+                    admin_notification_url,
+                    json=notification_data,
+                    timeout=5,
+                    headers=headers
+                )
+                if response.status_code == 200:
+                    logger.info(f"Admin notification sent successfully for user {user.username}")
+                else:
+                    logger.warning(f"Admin notification failed with status {response.status_code} for user {user.username}")
+            
+        except Exception as e:
+            # Don't fail email verification if admin notification fails
+            logger.error(f"Failed to send admin notification for user {user.username}: {str(e)}")

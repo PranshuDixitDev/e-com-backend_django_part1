@@ -9,18 +9,99 @@ class APIEvent(models.Model):
         ('success', 'Success'),
         ('failure', 'Failure'),
     )
+    
+    METHOD_CHOICES = (
+        ('GET', 'GET'),
+        ('POST', 'POST'),
+        ('PUT', 'PUT'),
+        ('PATCH', 'PATCH'),
+        ('DELETE', 'DELETE'),
+        ('OPTIONS', 'OPTIONS'),
+        ('HEAD', 'HEAD'),
+    )
+    
+    # Basic tracking fields
     timestamp = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES)
     endpoint = models.CharField(max_length=255, blank=True, null=True)
     response_time = models.FloatField(blank=True, null=True)
-
+    
+    # Enhanced tracking fields
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="User who made the API call"
+    )
+    ip_address = models.GenericIPAddressField(
+        blank=True, 
+        null=True,
+        help_text="IP address of the client"
+    )
+    user_agent = models.TextField(
+        blank=True, 
+        null=True,
+        help_text="User agent string from the request"
+    )
+    request_method = models.CharField(
+        max_length=10, 
+        choices=METHOD_CHOICES,
+        blank=True,
+        null=True,
+        help_text="HTTP method used for the request"
+    )
+    request_data = models.JSONField(
+        blank=True, 
+        null=True,
+        help_text="Request payload data (excluding sensitive information)"
+    )
+    response_status_code = models.IntegerField(
+        blank=True,
+        null=True,
+        help_text="HTTP response status code"
+    )
+    error_message = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Error message if the request failed"
+    )
+    session_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Session ID for tracking user sessions"
+    )
+    referer = models.URLField(
+        blank=True,
+        null=True,
+        help_text="Referer URL from the request headers"
+    )
+    request_size = models.IntegerField(
+        blank=True,
+        null=True,
+        help_text="Size of the request in bytes"
+    )
+    response_size = models.IntegerField(
+        blank=True,
+        null=True,
+        help_text="Size of the response in bytes"
+    )
+    
     def __str__(self):
-        return f"{self.status} at {self.timestamp}"
+        user_info = f" by {self.user.username}" if self.user else ""
+        return f"{self.request_method} {self.endpoint} - {self.status}{user_info} at {self.timestamp}"
 
     class Meta:
         verbose_name = "API Event"
         verbose_name_plural = "API Events"
         ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['timestamp', 'status']),
+            models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['endpoint', 'status']),
+            models.Index(fields=['ip_address', 'timestamp']),
+        ]
 
 class UserSession(models.Model):
     user_id = models.CharField(max_length=255)
@@ -385,10 +466,18 @@ class UserActivityLog(models.Model):
         ('PAYMENT', 'Payment Made'),
         ('PROFILE_UPDATE', 'Profile Updated'),
         ('ADDRESS_ADD', 'Address Added'),
+        ('EMAIL_VERIFICATION', 'Email Verification'),
+        ('REGISTRATION', 'Registration'),
+        ('PASSWORD_CHANGE', 'Password Change'),
+        ('PASSWORD_RESET', 'Password Reset'),
+        ('PASSWORD_RESET_EMAIL_SENT', 'Password Reset Email Sent'),
+        ('PASSWORD_RESET_EMAIL_FAILED', 'Password Reset Email Failed'),
+        ('ACCOUNT_LOCKED', 'Account Locked'),
+        ('SUSPICIOUS_ACTIVITY', 'Suspicious Activity'),
     )
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    activity_type = models.CharField(max_length=20, choices=ACTIVITY_TYPES)
+    activity_type = models.CharField(max_length=50, choices=ACTIVITY_TYPES)
     timestamp = models.DateTimeField(auto_now_add=True)
     ip_address = models.GenericIPAddressField(blank=True, null=True)
     details = models.JSONField(null=True, blank=True)
@@ -423,3 +512,134 @@ class SearchAnalytics(models.Model):
         verbose_name = "Search Analytics"
         verbose_name_plural = "Search Analytics"
         ordering = ['-timestamp']
+
+
+class ProductAnalytics(models.Model):
+    """Track product performance metrics"""
+    product = models.ForeignKey(
+        'products.Product',
+        on_delete=models.CASCADE
+    )
+    date = models.DateField()
+    views = models.IntegerField(default=0)
+    cart_additions = models.IntegerField(default=0)
+    purchases = models.IntegerField(default=0)
+    revenue = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    conversion_rate = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    cart_to_purchase_rate = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    
+    class Meta:
+        verbose_name = "Product Analytics"
+        verbose_name_plural = "Product Analytics"
+        unique_together = ['product', 'date']
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['product', 'date']),
+            models.Index(fields=['date', 'conversion_rate'])
+        ]
+
+
+class ConversionFunnel(models.Model):
+    """Track conversion funnel metrics"""
+    FUNNEL_STAGES = (
+        ('PRODUCT_VIEW', 'Product View'),
+        ('CART_ADD', 'Add to Cart'),
+        ('CHECKOUT_START', 'Checkout Started'),
+        ('PAYMENT_INFO', 'Payment Info Added'),
+        ('ORDER_COMPLETE', 'Order Completed'),
+    )
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
+    session_id = models.CharField(max_length=255)
+    stage = models.CharField(max_length=20, choices=FUNNEL_STAGES)
+    product = models.ForeignKey(
+        'products.Product',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    timestamp = models.DateTimeField(auto_now_add=True)
+    metadata = models.JSONField(null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "Conversion Funnel"
+        verbose_name_plural = "Conversion Funnels"
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', 'session_id', 'timestamp']),
+            models.Index(fields=['stage', 'timestamp'])
+        ]
+
+
+class CartAbandonmentAnalytics(models.Model):
+    """Track cart abandonment patterns"""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
+    session_id = models.CharField(max_length=255)
+    cart_created = models.DateTimeField()
+    cart_abandoned = models.DateTimeField(auto_now_add=True)
+    cart_value = models.DecimalField(max_digits=10, decimal_places=2)
+    items_count = models.IntegerField()
+    abandonment_stage = models.CharField(max_length=50)  # cart, checkout, payment
+    recovery_email_sent = models.BooleanField(default=False)
+    recovered = models.BooleanField(default=False)
+    recovery_date = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "Cart Abandonment Analytics"
+        verbose_name_plural = "Cart Abandonment Analytics"
+        ordering = ['-cart_abandoned']
+        indexes = [
+            models.Index(fields=['user', 'cart_abandoned']),
+            models.Index(fields=['abandonment_stage', 'recovered'])
+        ]
+
+
+class CustomerLifetimeValue(models.Model):
+    """Track customer lifetime value metrics"""
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
+    total_orders = models.IntegerField(default=0)
+    total_spent = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    avg_order_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    first_order_date = models.DateTimeField(null=True, blank=True)
+    last_order_date = models.DateTimeField(null=True, blank=True)
+    predicted_ltv = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    customer_segment = models.CharField(max_length=50, default='new')  # new, regular, vip, churned
+    last_updated = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Customer Lifetime Value"
+        verbose_name_plural = "Customer Lifetime Values"
+        ordering = ['-total_spent']
+        indexes = [
+            models.Index(fields=['customer_segment', 'total_spent']),
+            models.Index(fields=['last_order_date'])
+        ]
+
+
+class SalesMetrics(models.Model):
+    """Track daily sales metrics and KPIs"""
+    date = models.DateField(unique=True)
+    total_visitors = models.IntegerField(default=0)
+    unique_visitors = models.IntegerField(default=0)
+    conversion_rate = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    cart_abandonment_rate = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    new_customers = models.IntegerField(default=0)
+    returning_customers = models.IntegerField(default=0)
+    customer_acquisition_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    class Meta:
+        verbose_name = "Sales Metrics"
+        verbose_name_plural = "Sales Metrics"
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['date', 'conversion_rate'])
+        ]

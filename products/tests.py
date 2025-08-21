@@ -32,10 +32,27 @@ class ProductModelTest(APITestCase):
       - Unique product name enforcement.
       - Validation of the minimum required price-weight combinations.
     """
+    
+    def create_test_image(self, format='JPEG', size=(100, 100), color='blue'):
+        """Create a test image for category."""
+        image = Image.new('RGB', size, color)
+        image_io = BytesIO()
+        image.save(image_io, format=format)
+        image_io.seek(0)
+        return SimpleUploadedFile(
+            name=f'test_category.{format.lower()}',
+            content=image_io.getvalue(),
+            content_type=f'image/{format.lower()}'
+        )
+    
     @classmethod
     def setUpTestData(cls):
         # Setup data for tests.
-        cls.category = Category.objects.create(name="Electronics")
+        cls.category = Category.objects.create(
+            name="Electronics",
+            description="Electronic devices and gadgets",
+            image=cls().create_test_image()
+        )
         cls.user = User.objects.create_user(
             username='user', 
             password='pass',
@@ -168,9 +185,25 @@ class ProductModelTest(APITestCase):
         pass
 
 class ProductInventoryAdjustmentTests(APITestCase):
+    def create_test_image(self, format='JPEG', size=(100, 100), color='green'):
+        """Create a test image for category."""
+        image = Image.new('RGB', size, color)
+        image_io = BytesIO()
+        image.save(image_io, format=format)
+        image_io.seek(0)
+        return SimpleUploadedFile(
+            name=f'test_category.{format.lower()}',
+            content=image_io.getvalue(),
+            content_type=f'image/{format.lower()}'
+        )
+    
     @classmethod
     def setUpTestData(cls):
-        cls.category = Category.objects.create(name="Gadgets")
+        cls.category = Category.objects.create(
+            name="Gadgets",
+            description="Various gadgets and accessories",
+            image=cls().create_test_image()
+        )
         cls.admin = User.objects.create_superuser(username='admin', password='adminpass')
         cls.product = Product.objects.create(
             name="Gadget",
@@ -322,9 +355,25 @@ class ProductInventoryAdjustmentTests(APITestCase):
 
 
 class ProductCreationEdgeCaseTests(APITestCase):
+    def create_test_image(self, format='JPEG', size=(100, 100), color='yellow'):
+        """Create a test image for category."""
+        image = Image.new('RGB', size, color)
+        image_io = BytesIO()
+        image.save(image_io, format=format)
+        image_io.seek(0)
+        return SimpleUploadedFile(
+            name=f'test_category.{format.lower()}',
+            content=image_io.getvalue(),
+            content_type=f'image/{format.lower()}'
+        )
+    
     @classmethod
     def setUpTestData(cls):
-        cls.category = Category.objects.create(name="Gadgets")
+        cls.category = Category.objects.create(
+            name="Gadgets",
+            description="Edge case testing gadgets",
+            image=cls().create_test_image()
+        )
         cls.admin = User.objects.create_superuser(username='admin', password='adminpass')
         cls.url_list = reverse('product-list')
         cls.admin_token = str(RefreshToken.for_user(cls.admin).access_token)
@@ -376,9 +425,25 @@ class ProductCreationEdgeCaseTests(APITestCase):
         self.assertIn('price', response.data['price_weights'][0])  # Adjusting to the correct nesting
 
 class ProductModelTests(TestCase):
+    def create_test_image(self, format='JPEG', size=(100, 100), color='purple'):
+        """Create a test image for category."""
+        image = Image.new('RGB', size, color)
+        image_io = BytesIO()
+        image.save(image_io, format=format)
+        image_io.seek(0)
+        return SimpleUploadedFile(
+            name=f'test_category_image.{format.lower()}',
+            content=image_io.getvalue(),
+            content_type=f'image/{format.lower()}'
+        )
+    
     @classmethod
     def setUpTestData(cls):
-        cls.category = Category.objects.create(name="Electronics")
+        cls.category = Category.objects.create(
+            name="Electronics",
+            description="Electronics category for testing",
+            image=cls().create_test_image()
+        )
         
     def test_deactivate_product(self):
         """Test that deactivating a product works as expected."""
@@ -427,9 +492,25 @@ class ProductModelTests(TestCase):
         self.assertIn(product.name, response.content.decode())
 
 class ProductImageTests(APITestCase):
+    def create_test_category_image(self, format='JPEG', size=(100, 100), color='orange'):
+        """Create a test image for category."""
+        image = Image.new('RGB', size, color)
+        image_io = BytesIO()
+        image.save(image_io, format=format)
+        image_io.seek(0)
+        return SimpleUploadedFile(
+            name=f'test_category_image.{format.lower()}',
+            content=image_io.getvalue(),
+            content_type=f'image/{format.lower()}'
+        )
+    
     @classmethod
     def setUpTestData(cls):
-        cls.category = Category.objects.create(name="Electronics")
+        cls.category = Category.objects.create(
+            name="Electronics",
+            description="Electronics category for testing",
+            image=cls().create_test_category_image()
+        )
         cls.admin = User.objects.create_superuser(
             username='admin', 
             password='adminpass',
@@ -590,9 +671,25 @@ class ProductImageTests(APITestCase):
         self.assertTrue(product_image.is_primary)
 
 class PriceWeightInventoryTests(TransactionTestCase):
+    def create_test_image(self, format='JPEG', size=(100, 100), color='red'):
+        """Create a test image for category."""
+        image = Image.new('RGB', size, color)
+        image_io = BytesIO()
+        image.save(image_io, format=format)
+        image_io.seek(0)
+        return SimpleUploadedFile(
+            name=f'test_category.{format.lower()}',
+            content=image_io.getvalue(),
+            content_type=f'image/{format.lower()}'
+        )
+
     def test_concurrent_inventory_decrease(self):
         """Test concurrent inventory updates with atomic decrease_inventory."""
-        test_category = Category.objects.create(name="Test Category for Concurrency")
+        test_category = Category.objects.create(
+            name="Test Category for Concurrency",
+            description="Test description for concurrency testing",
+            image=self.create_test_image()
+        )
         product = Product.objects.create(name="Test Product Concurrency", category=test_category)
         price_weight = PriceWeight.objects.create(
             product=product,

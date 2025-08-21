@@ -70,9 +70,13 @@
 
     .stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         gap: 1.5rem;
-        margin-top: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stats-grid.full-width {
+        grid-template-columns: 1fr;
     }
 
     .stat-card {
@@ -124,10 +128,26 @@
         font-weight: 600;
     }
 
-    .stat-number.pending { color: #f59e0b; }
-    .stat-number.processing { color: #3b82f6; }
-    .stat-number.success { color: #10b981; }
-    .stat-number.failure { color: #ef4444; }
+    .stat-number.pending { 
+        color: #f59e0b; 
+        font-weight: 600;
+    }
+    .stat-number.processing { 
+        color: #3b82f6; 
+        font-weight: 600;
+    }
+    .stat-number.success { 
+        color: #10b981; 
+        font-weight: 600;
+    }
+    .stat-number.failure { 
+        color: #ef4444; 
+        font-weight: 600;
+    }
+    .stat-number.warning {
+        color: #f59e0b;
+        font-weight: 600;
+    }
 
     .revenue {
         background: linear-gradient(135deg, #10b981, #059669);
@@ -179,6 +199,21 @@
         display: none !important;
     }
 </style>
+
+<script>
+function toggleApiDetails() {
+    const apiDetails = document.getElementById('api-details');
+    const successRate = document.getElementById('api-success-rate');
+    
+    if (apiDetails.style.display === 'none' || apiDetails.style.display === '') {
+        apiDetails.style.display = 'block';
+        successRate.innerHTML = successRate.innerHTML.replace('%', '% 🔽');
+    } else {
+        apiDetails.style.display = 'none';
+        successRate.innerHTML = successRate.innerHTML.replace(' 🔽', '');
+    }
+}
+</script>
 {% endblock %}
 
 {% block content %}
@@ -196,73 +231,153 @@
             </div>
             <div class="summary-stat">
                 <h3>API Success Rate</h3>
-                <p>{{ api_success }}%</p>
+                <p id="api-success-rate" style="cursor: pointer;" onclick="toggleApiDetails()">{{ api_success_rate }}%</p>
+                <small style="opacity: 0.8;">{{ api_success_count }}/{{ total_api_calls }} calls</small>
             </div>
         </div>
     </div>
 
+    <!-- API Details Section (initially hidden) -->
+    <div id="api-details" class="stat-card" style="display: none; margin-top: 1rem;">
+        <h3>🔍 API Performance Details</h3>
+        <div class="stat-item">
+            <span class="stat-label">Total API Calls (Last 30 days)</span>
+            <span class="stat-number">{{ total_api_calls }}</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Successful Calls</span>
+            <span class="stat-number success">{{ api_success_count }}</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Failed Calls</span>
+            <span class="stat-number failure">{{ api_failure_count }}</span>
+        </div>
+        {% if recent_failures %}
+        <h4 style="margin-top: 1rem; margin-bottom: 0.5rem; color: #ef4444;">Recent API Failures:</h4>
+        {% for failure in recent_failures %}
+        <div class="stat-item">
+            <span class="stat-label">{{ failure.endpoint }} - {{ failure.timestamp|date:"M d, H:i" }}</span>
+            <span class="stat-number failure">{{ failure.response_time }}ms</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p style="color: #10b981; margin-top: 1rem;">✅ No recent API failures!</p>
+        {% endif %}
+    </div>
+
     <div class="stats-grid">
+        <!-- Inventory Analytics -->
         <div class="stat-card">
-            <h3>📦 Orders</h3>
+            <h3>📦 Inventory Overview</h3>
             <div class="stat-item">
-                <span class="stat-label">Total</span>
-                <span class="stat-number">{{ order_stats.total_orders }}</span>
+                <span class="stat-label">Total Active Products</span>
+                <span class="stat-number">{{ inventory_stats.total_products }}</span>
             </div>
             <div class="stat-item">
-                <span class="stat-label">Pending</span>
-                <span class="stat-number pending">{{ order_stats.pending_orders }}</span>
+                <span class="stat-label">Low Stock Items (≤10)</span>
+                <span class="stat-number pending">{{ inventory_stats.low_stock_items }}</span>
             </div>
             <div class="stat-item">
-                <span class="stat-label">Processing</span>
-                <span class="stat-number processing">{{ order_stats.processing_orders }}</span>
+                <span class="stat-label">Out of Stock Items</span>
+                <span class="stat-number failure">{{ inventory_stats.out_of_stock_items }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Total Inventory Value</span>
+                <span class="stat-number">₹{{ inventory_stats.total_inventory_value|floatformat:0 }}</span>
             </div>
         </div>
-        
+
+        <!-- E-commerce Performance -->
         <div class="stat-card">
-            <h3>👥 Users</h3>
+            <h3>🛒 E-commerce Performance</h3>
             <div class="stat-item">
-                <span class="stat-label">Total</span>
+                <span class="stat-label">Total Orders (30 days)</span>
+                <span class="stat-number">{{ ecommerce_stats.total_orders }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Conversion Rate</span>
+                <span class="stat-number success">{{ ecommerce_stats.conversion_rate }}%</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Total Revenue</span>
+                <span class="stat-number">₹{{ ecommerce_stats.total_revenue|floatformat:0 }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Average Order Value</span>
+                <span class="stat-number">₹{{ ecommerce_stats.avg_order_value|floatformat:0 }}</span>
+            </div>
+        </div>
+
+        <!-- Order Status Breakdown -->
+        <div class="stat-card">
+            <h3>📈 Order Status Breakdown</h3>
+            <div class="stat-item">
+                <span class="stat-label">Completed Orders</span>
+                <span class="stat-number success">{{ ecommerce_stats.completed_orders }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Pending Orders</span>
+                <span class="stat-number pending">{{ ecommerce_stats.pending_orders }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Cancelled Orders</span>
+                <span class="stat-number failure">{{ ecommerce_stats.cancelled_orders }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Average Shipping Cost</span>
+                <span class="stat-number">₹{{ ecommerce_stats.avg_shipping_cost|floatformat:0 }}</span>
+            </div>
+        </div>
+
+        <!-- Top Products -->
+        <div class="stat-card">
+            <h3>🏆 Top Selling Products</h3>
+            {% for product in top_products %}
+            <div class="stat-item">
+                <span class="stat-label">{{ product.product__name|truncatechars:25 }}</span>
+                <span class="stat-number">{{ product.total_sold }} units (₹{{ product.revenue|floatformat:0 }})</span>
+            </div>
+            {% empty %}
+            <p style="color: #6b7280; font-style: italic;">No sales data available</p>
+            {% endfor %}
+        </div>
+
+        <!-- Payment Methods -->
+        <div class="stat-card">
+            <h3>💳 Payment Analytics</h3>
+            {% for method in payment_methods %}
+            <div class="stat-item">
+                <span class="stat-label">{{ method.payment_method|default:"Unknown" }}</span>
+                <span class="stat-number">{{ method.count }} orders (₹{{ method.revenue|floatformat:0 }})</span>
+            </div>
+            {% empty %}
+            <p style="color: #6b7280; font-style: italic;">No payment data available</p>
+            {% endfor %}
+        </div>
+
+        <!-- User Analytics -->
+        <div class="stat-card">
+            <h3>👥 User Analytics</h3>
+            <div class="stat-item">
+                <span class="stat-label">Total Users</span>
                 <span class="stat-number">{{ user_stats.total_users }}</span>
             </div>
             <div class="stat-item">
-                <span class="stat-label">Active</span>
+                <span class="stat-label">Active Users (Last 30 days)</span>
                 <span class="stat-number success">{{ user_stats.active_users }}</span>
             </div>
             <div class="stat-item">
-                <span class="stat-label">Verified</span>
-                <span class="stat-number success">{{ user_stats.verified_users }}</span>
+                <span class="stat-label">New Users (Last 30 days)</span>
+                <span class="stat-number">{{ user_stats.new_users }}</span>
             </div>
         </div>
+    </div>
 
-        <div class="stat-card">
-            <h3>⚙️ API Health</h3>
-            <div class="stat-item">
-                <span class="stat-label">Success</span>
-                <span class="stat-number success">{{ api_success }}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">Failures</span>
-                <span class="stat-number failure">{{ api_failure }}</span>
-            </div>
-        </div>
-            <div class="stat-card">
-                <h3>✅ Completed Orders</h3>
-                <div class="stat-item">
-                    <span class="stat-label">Count</span>
-                    <span class="stat-number success">{{ order_stats.completed_orders }}</span>
-                </div>
-        </div>
-
-        <div class="stat-card revenue">
-            <h3>💰 Revenue Analytics</h3>
-            <div class="stat-item">
-                <span class="stat-label">Total</span>
-                <span class="stat-number">₹{{ order_stats.total_revenue|floatformat:2 }}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">Avg. Order</span>
-                <span class="stat-number">₹{{ order_stats.avg_order_value|floatformat:2 }}</span>
-            </div>
+    <!-- Sales Chart Section -->
+    <div class="stats-grid" style="margin-top: 2rem;">
+        <div class="stat-card" style="grid-column: 1 / -1;">
+            <h3>📊 Sales Analytics (Last 30 Days)</h3>
+            <canvas id="salesChart" width="400" height="200"></canvas>
         </div>
     </div>
 </div>

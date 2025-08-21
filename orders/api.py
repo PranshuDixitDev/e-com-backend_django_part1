@@ -31,20 +31,7 @@ from users.models import Address
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
-user = User.objects.first()  # or get a specific user
 
-# Create a test address
-address = Address.objects.create(
-    user=user,
-    address_line1="123 Test Street",
-    city="Mumbai",
-    state="Maharashtra",
-    postal_code="400001",
-    country="India"
-)
-print(f"Created address with ID: {address.id}")
-
-logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
 
 def calculate_gst(amount):

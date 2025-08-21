@@ -19,7 +19,10 @@ class UserAccountTests(APITestCase):
             phone_number='+919876543210',
             birthdate='1990-01-01'
         )
-
+        # Mark the test user as email-verified to allow login per policy
+        self.user.is_email_verified = True
+        self.user.save(update_fields=['is_email_verified'])
+        
         # Create an address associated with the user
         self.address = Address.objects.create(
             user=self.user,
@@ -114,15 +117,15 @@ class UserAccountTests(APITestCase):
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(response.data['error'], 'Invalid Credentials')
+        self.assertEqual(response.data['error'], 'Invalid credentials')
     
 
-    @override_settings(ENABLE_RATE_LIMIT=True)
+    @override_settings(ENABLE_RATE_LIMIT=True, TESTING=False)
     def test_rate_limit_registration(self):
         url = reverse('user-register')
 
         # Send requests with unique data
-        for i in range(6):
+        for i in range(5):
             unique_data = {
                 'username': f'newuser{i}',
                 'email': f'newuser{i}@example.com',
@@ -144,21 +147,33 @@ class UserAccountTests(APITestCase):
             response = self.client.post(url, data=unique_data, format='json')
             print("test_rate_limit_registration ******", response)
 
-            # Verify successful registration within limit (i < 5)
-            if i < 5:
+            # Verify successful registration within limit (i < 3)
+            if i < 3:
                 self.assertEqual(response.status_code, status.HTTP_201_CREATED,
                                  f"Request {i+1} should be successful: {response.data}")
 
-            # Verify rate limit exceeded (i >= 5)
+            # Verify rate limit exceeded (i >= 3)
             else:
                 self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_429_TOO_MANY_REQUESTS],
                               f"Expected rate limit error but got {response.status_code}: {response.data}")
 
 
     def test_user_logout(self):
+        # Create a fresh user specifically for this test to avoid conflicts
+        logout_user = CustomUser.objects.create_user(
+            username='logoutuser',
+            email='logoutuser@gmail.com',
+            password='password123',
+            first_name='Logout',
+            last_name='User',
+            phone_number='+919876543211',
+            birthdate='1990-01-01',
+            is_email_verified=True
+        )
+        
         # Log in to get the access and refresh tokens
         login_response = self.client.post(reverse('user-login'), {
-            'login': 'testuser',
+            'login': 'logoutuser',
             'password': 'password123'
         })
         self.assertEqual(login_response.status_code, status.HTTP_200_OK)
@@ -326,3 +341,55 @@ class UserAccountTests(APITestCase):
         self.assertEqual(len(response.data['addresses']), 2)
         self.assertEqual(response.data['addresses'][0]['city'], 'Anytown')
         self.assertEqual(response.data['addresses'][1]['city'], 'Othertown')
+
+    def test_logout_missing_refresh_token(self):
+        # Authenticate with access token first
+        login_response = self.client.post(reverse('user-login'), {
+            'login': 'testuser',
+            'password': 'password123'
+        })
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + login_response.data['access'])
+
+        # Missing refresh token in payload
+        response = self.client.post(reverse('user-logout'), {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data.get('error'), 'Refresh token is required')
+
+        self.client.credentials()
+
+    def test_logout_malformed_refresh_token(self):
+        # Authenticate with access token first
+        login_response = self.client.post(reverse('user-login'), {
+            'login': 'testuser',
+            'password': 'password123'
+        })
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + login_response.data['access'])
+
+        # Provide malformed token
+        response = self.client.post(reverse('user-logout'), {'refresh': 'not-a-valid-jwt'}, format='json')
+        # Could be 400 (Invalid token format) or 401 depending on underlying validation
+        self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED])
+
+        self.client.credentials()
+
+    def test_logout_using_access_token_in_refresh_field(self):
+        login_response = self.client.post(reverse('user-login'), {
+            'login': 'testuser',
+            'password': 'password123'
+        })
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        access_token = login_response.data['access']
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + access_token)
+
+        # Try to blacklist access token accidentally passed in refresh field
+        response = self.client.post(reverse('user-logout'), {'refresh': access_token}, format='json')
+        self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED])
+
+        self.client.credentials()
+
+    def test_logout_unauthorized_without_auth_header(self):
+        # No Authorization header
+        response = self.client.post(reverse('user-logout'), {'refresh': 'dummy'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

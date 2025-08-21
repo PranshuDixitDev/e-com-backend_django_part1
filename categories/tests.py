@@ -2,11 +2,26 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
+from io import BytesIO
 from .models import Category
 
 User = get_user_model()
 
 class CategoryTestCase(APITestCase):
+    
+    def create_test_image(self, format='JPEG', size=(100, 100), color='blue'):
+        """Create a test image file for testing purposes."""
+        image = Image.new('RGB', size, color)
+        image_io = BytesIO()
+        image.save(image_io, format=format)
+        image_io.seek(0)
+        return SimpleUploadedFile(
+            name=f'test_image.{format.lower()}',
+            content=image_io.getvalue(),
+            content_type=f'image/{format.lower()}'
+        )
     
     def setUp(self):
         """
@@ -23,7 +38,7 @@ class CategoryTestCase(APITestCase):
             phone_number='+911234567890'  # Another unique phone number
         )
         self.category = Category.objects.create(
-            name="Electronics", description="Gadgets and more", image='path/to/default/image.png'
+            name="Electronics", description="Gadgets and more", image=self.create_test_image()
         )
 
     def test_list_categories(self):

@@ -210,6 +210,13 @@ class Order(models.Model):
                     self.shipping_method = shipping_data.get('shipping_method', 'Standard')
                     self.carrier = shipping_data.get('carrier')
     
+                    # Skip Shiprocket integration if using dummy token (development/testing)
+                    if settings.SHIPROCKET_API_TOKEN == 'dummy_token':
+                        logger.info(f"Skipping Shiprocket integration for order {self.order_number} - using dummy token")
+                        self.shipping_cost = Decimal('50.00')  # Default shipping cost for development
+                        self.status = 'PROCESSING'
+                        return
+    
                     # Dynamically fetch shipping cost using Shiprocket's serviceability API
                     service_payload = {
                         "pickup_postcode": settings.WAREHOUSE_PINCODE,  # Ensure WAREHOUSE_PINCODE is defined in settings
@@ -242,7 +249,7 @@ class Order(models.Model):
     
                 except Exception as e:
                     error_message = str(e)
-                    logger.error(f"Shipping API error: {error_message}")
+                    logger.error(f"Shiprocket shipment creation failed: {error_message}")
                     # Log failure
                     ShippingLog.objects.create(
                         order_number=self.order_number,

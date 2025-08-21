@@ -9,6 +9,8 @@ class CustomUser(AbstractUser):
     phone_number = models.CharField(validators=[phone_validator], max_length=14, unique=True)
     birthdate = models.DateField(null=True, blank=False)  # Optional for superuser
     is_email_verified = models.BooleanField(default=False)
+    email_sent = models.BooleanField(default=False, help_text='Indicates if verification email was successfully sent')
+    email_failed = models.BooleanField(default=False, help_text='Indicates if verification email failed to send')
     
     class Meta:
         verbose_name = 'user'

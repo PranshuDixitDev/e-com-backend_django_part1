@@ -72,7 +72,7 @@ class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ['id', 'name', 'slug', 'category', 'category_name', 'tags', 'price_weights', 'images', 'is_active', 'status']
+        fields = ['id', 'name', 'slug', 'description', 'category', 'category_name', 'tags', 'price_weights', 'images', 'is_active', 'status']
         depth = 1
 
     def get_status(self, obj):

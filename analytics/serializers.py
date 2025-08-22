@@ -39,8 +39,9 @@ class SearchAnalyticsSerializer(serializers.ModelSerializer):
     class Meta:
         model = SearchAnalytics
         fields = [
-            'id', 'query', 'user', 'user_email', 'timestamp', 
-            'results_count', 'category', 'category_name'
+            'id', 'query', 'user', 'user_email', 'date', 'timestamp', 
+            'results_count', 'search_count', 'click_through_rate', 
+            'category', 'category_name'
         ]
         read_only_fields = ['id', 'timestamp']
 

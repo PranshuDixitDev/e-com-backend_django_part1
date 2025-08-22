@@ -9,6 +9,7 @@ from .api import (
     AddressListCreateAPIView,
     AddressDetailAPIView,
     VerifyEmail,
+    ResendVerificationEmailAPIView,
 )
 from .verify_email_encrypted import VerifyEmailEncrypted
 from .password_reset_encrypted import PasswordResetConfirmEncrypted
@@ -27,4 +28,5 @@ urlpatterns = [
     path('email-verify/<uidb64>/<token>/', VerifyEmail.as_view(), name='email-verify'),
     # Encrypted verification endpoint (supports ?uid=&token=)
     path('email-verify/', VerifyEmailEncrypted.as_view(), name='email-verify-encrypted'),
+    path('resend-verification-email/', ResendVerificationEmailAPIView.as_view(), name='resend-verification-email'),
 ]

@@ -474,6 +474,7 @@ class UserActivityLog(models.Model):
         ('PASSWORD_RESET_EMAIL_FAILED', 'Password Reset Email Failed'),
         ('ACCOUNT_LOCKED', 'Account Locked'),
         ('SUSPICIOUS_ACTIVITY', 'Suspicious Activity'),
+        ('SEARCH', 'Search Query'),
     )
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -491,7 +492,7 @@ class UserActivityLog(models.Model):
         ]
 
 class SearchAnalytics(models.Model):
-    """Track search patterns"""
+    """Track search patterns and analytics"""
     query = models.CharField(max_length=255)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -499,8 +500,11 @@ class SearchAnalytics(models.Model):
         null=True,
         blank=True
     )
+    date = models.DateField()
     timestamp = models.DateTimeField(auto_now_add=True)
-    results_count = models.IntegerField()
+    results_count = models.IntegerField(default=0)
+    search_count = models.IntegerField(default=1)
+    click_through_rate = models.DecimalField(max_digits=5, decimal_places=4, default=0.0)
     category = models.ForeignKey(
         'categories.Category',
         on_delete=models.SET_NULL,
@@ -512,6 +516,11 @@ class SearchAnalytics(models.Model):
         verbose_name = "Search Analytics"
         verbose_name_plural = "Search Analytics"
         ordering = ['-timestamp']
+        unique_together = ['query', 'date']
+        indexes = [
+            models.Index(fields=['query', 'date']),
+            models.Index(fields=['date', 'search_count'])
+        ]
 
 
 class ProductAnalytics(models.Model):

@@ -1,9 +1,9 @@
-"""
-Utility functions for user management.
+"""Utility functions for user management.
 
 This module contains reusable functions following DRY principles.
 """
 
+import logging
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
@@ -12,6 +12,9 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from .tokens import email_verification_token
 from .encryption import create_encrypted_verification_link, encrypt_email_token
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
 
 
 def send_verification_email(user):
@@ -40,7 +43,7 @@ def send_verification_email(user):
         # Use the current domain for the backend API endpoint
         from django.contrib.sites.models import Site
         current_site = Site.objects.get_current()
-        backend_domain = f"http://{current_site.domain}:8001" if settings.DEBUG else f"https://{current_site.domain}"
+        backend_domain = f"http://{current_site.domain}:8000" if settings.DEBUG else f"https://{current_site.domain}"
         
         # Use encrypted verification endpoint for security
         verification_link = f"{backend_domain}/api/users/email-verify/?uid={uid}&token={encrypt_email_token(user.pk, 'email_verification')}"
@@ -68,15 +71,56 @@ def send_verification_email(user):
         user.email_failed = False
         user.save(update_fields=['email_sent', 'email_failed'])
         
+        # Log successful email send
+        logger.info(
+            f"Verification email sent successfully to {user.email}. "
+            f"User ID: {user.id}, Username: {user.username}",
+            extra={
+                'user_id': user.id,
+                'user_email': user.email,
+                'user_username': user.username,
+                'action': 'send_verification_email_success'
+            }
+        )
+        
         return True
         
     except Exception as e:
-        # Log error if needed
-        print(f"Failed to send verification email to {user.email}: {str(e)}")
+        # Log detailed error information
+        logger.error(
+            f"Failed to send verification email to {user.email}. "
+            f"User ID: {user.id}, Username: {user.username}. "
+            f"Error: {str(e)}",
+            exc_info=True,
+            extra={
+                'user_id': user.id,
+                'user_email': user.email,
+                'user_username': user.username,
+                'action': 'send_verification_email',
+                'error_type': type(e).__name__
+            }
+        )
         
         # Update email_failed status on failure
-        user.email_sent = False
-        user.email_failed = True
-        user.save(update_fields=['email_sent', 'email_failed'])
+        try:
+            user.email_sent = False
+            user.email_failed = True
+            user.save(update_fields=['email_sent', 'email_failed'])
+            logger.info(
+                f"Updated email_failed status for user {user.email} (ID: {user.id})"
+            )
+        except Exception as save_error:
+            logger.critical(
+                f"Failed to update email_failed status for user {user.email} (ID: {user.id}). "
+                f"Save error: {str(save_error)}",
+                exc_info=True,
+                extra={
+                    'user_id': user.id,
+                    'user_email': user.email,
+                    'action': 'update_email_failed_status',
+                    'original_error': str(e),
+                    'save_error': str(save_error)
+                }
+            )
         
         return False

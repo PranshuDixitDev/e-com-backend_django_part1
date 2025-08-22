@@ -266,7 +266,7 @@ MIDDLEWARE = [
 ]
 
 CSP_DEFAULT_SRC = ("'self'",)
-CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'https://apis.example.com', 'https://ajax.googleapis.com', "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com")
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'http://localhost:8000' if DEBUG else 'https://apis.example.com', 'https://ajax.googleapis.com', "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com")
 CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", 'https://fonts.googleapis.com')
 CSP_IMG_SRC = ("'self'", 'data:', 'https://api.gujjumasala.in', 'https://www.gujjumasala.in', "https:")
 CSP_FONT_SRC = ("'self'", 'https://fonts.gstatic.com')
@@ -422,12 +422,12 @@ FRONTEND_URL = config('FRONTEND_URL', default='https://www.gujjumasala.in')
 # Admin notification URL for email verification events
 # Configurable for different environments (development, staging, production)
 if DEBUG:
-    ADMIN_NOTIFICATION_URL = f'http://localhost:8001/api/analytics/admin-notifications/'
+    ADMIN_NOTIFICATION_URL = f'http://localhost:8000/api/analytics/admin-notifications/'
 else:
     # Production should use environment variable or proper domain
     ADMIN_NOTIFICATION_URL = os.environ.get(
         'ADMIN_NOTIFICATION_URL', 
-        'https://api.yourdomain.com/api/analytics/admin-notifications/'
+        'https://api.gujjumasala.in/api/analytics/admin-notifications/'
     )
 
 # Internal service token for secure admin notifications

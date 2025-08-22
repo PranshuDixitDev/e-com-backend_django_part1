@@ -269,6 +269,51 @@ class AddressDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         self.check_object_permissions(self.request, obj)
         return obj
 
+class ResendVerificationEmailAPIView(APIView):
+    permission_classes = [AllowAny]
+    
+    @method_decorator(production_ratelimit(key='ip', rate='2/m', method='POST'))
+    def post(self, request):
+        """Resend verification email to user."""
+        email = request.data.get('email')
+        
+        if not email:
+            return Response({
+                'error': 'Email is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # Don't reveal if email exists or not for security
+            return Response({
+                'message': 'If the email exists in our system, a verification email will be sent.'
+            }, status=status.HTTP_200_OK)
+        
+        # Check if user is already verified
+        if user.is_email_verified:
+            return Response({
+                'error': 'Email is already verified'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Reset email status flags before resending
+        user.email_sent = False
+        user.email_failed = False
+        user.save(update_fields=['email_sent', 'email_failed'])
+        
+        # Send verification email
+        if send_verification_email(user):
+            logger.info(f"Verification email resent successfully to {user.email}")
+            return Response({
+                'message': 'Verification email sent successfully'
+            }, status=status.HTTP_200_OK)
+        else:
+            logger.error(f"Failed to resend verification email to {user.email}")
+            return Response({
+                'error': 'Failed to send verification email. Please try again later.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class VerifyEmail(APIView):
     permission_classes = [AllowAny]
 

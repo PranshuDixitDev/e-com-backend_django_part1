@@ -2780,3 +2780,218 @@ The following issues have been identified in the project configuration (primaril
 - **API Rate Limiting**: Consider implementing rate limiting to prevent abuse of the enhanced API tracking system.
 
 Address these before deploying to production to ensure security and functionality.
+
+# Email Verification API Documentation
+
+## Resend Verification Email
+
+### Endpoint
+- **URL**: `/api/users/resend-verification-email/`
+- **Method**: `POST`
+- **Auth Required**: No (AllowAny)
+- **Rate Limiting**: 2 requests per minute per IP address
+- **Description**: Resends email verification link to users who haven't verified their email address
+
+### Purpose
+This endpoint allows users to request a new verification email if:
+- Their original verification email was not received
+- The verification link has expired
+- They need to resend the verification for any reason
+
+The endpoint implements rate limiting (5 attempts per day per email address) to prevent abuse and includes comprehensive error handling for various scenarios.
+
+### Request Format
+
+#### Required Parameters
+```json
+{
+    "email": "user@example.com"
+}
+```
+
+#### Request Headers
+```
+Content-Type: application/json
+```
+
+### Response Formats
+
+#### Success Response (200 OK)
+```json
+{
+    "message": "Verification email sent successfully",
+    "email": "user@example.com",
+    "attempts_remaining": 4
+}
+```
+
+#### Rate Limit Exceeded (429 Too Many Requests)
+```json
+{
+    "error": "Daily email resend limit exceeded (5 attempts per day)",
+    "attempts_remaining": 0,
+    "support_contact": "support@gujjumasala.com",
+    "message": "Please contact support if you continue to have issues with email verification"
+}
+```
+
+#### Email Delivery Failed (400 Bad Request)
+```json
+{
+    "error": "Failed to send verification email. Please try again later or contact support.",
+    "email": "user@example.com",
+    "attempts_remaining": 3
+}
+```
+
+#### User Not Found (400 Bad Request)
+```json
+{
+    "error": "No user found with this email address",
+    "email": "nonexistent@example.com"
+}
+```
+
+#### Email Already Verified (400 Bad Request)
+```json
+{
+    "error": "Email is already verified",
+    "email": "verified@example.com"
+}
+```
+
+#### Invalid Email Format (400 Bad Request)
+```json
+{
+    "error": "Please provide a valid email address"
+}
+```
+
+#### Missing Email Parameter (400 Bad Request)
+```json
+{
+    "error": "Email address is required"
+}
+```
+
+### Error Codes
+
+| Status Code | Error Type | Description |
+|-------------|------------|-------------|
+| 200 | Success | Verification email sent successfully |
+| 400 | Bad Request | Invalid email, user not found, already verified, or email delivery failed |
+| 429 | Too Many Requests | Daily rate limit exceeded (5 attempts per day) |
+| 500 | Internal Server Error | Server error during email sending |
+
+### Rate Limiting Details
+
+#### Daily Limits
+- **Limit**: 5 resend attempts per email address per day
+- **Reset**: Limits reset at midnight UTC
+- **Tracking**: Attempts are tracked per email address, not per IP
+- **Cleanup**: Old attempt records are automatically cleaned up
+
+#### Rate Limit Response Fields
+- `attempts_remaining`: Number of attempts left for the day
+- `support_contact`: Contact email when limit is exceeded
+- `message`: Helpful message directing users to support
+
+### Security Features
+
+#### Input Validation
+- Email format validation using Django's built-in validators
+- Required field validation
+- Sanitization of input data
+
+#### Rate Limiting Protection
+- Per-email daily limits to prevent spam
+- IP-based rate limiting (2 requests per minute)
+- Automatic cleanup of old rate limit records
+
+#### Email Delivery Validation
+- Tracks email delivery success/failure
+- Records failed delivery attempts
+- Provides appropriate error messages for delivery failures
+
+### Implementation Details
+
+#### Database Models
+- `EmailResendAttempt`: Tracks resend attempts with fields:
+  - `email`: Email address
+  - `attempted_at`: Timestamp of attempt
+  - `success`: Whether the email was sent successfully
+  - `ip_address`: IP address of the request
+
+#### Email Verification Process
+1. Validates email format and required fields
+2. Checks if user exists with the provided email
+3. Verifies email is not already verified
+4. Checks daily rate limits for the email address
+5. Generates new verification token and encrypted link
+6. Sends verification email
+7. Records the attempt for rate limiting
+8. Returns appropriate response
+
+#### Token Security
+- Uses encrypted tokens with 24-hour expiration
+- Tokens are URL-safe and base64 encoded
+- Includes user ID and token type in encrypted payload
+- Supports both traditional Django tokens and encrypted Fernet tokens
+
+### Example Usage
+
+#### cURL Example
+```bash
+curl -X POST \
+  http://localhost:8000/api/users/resend-verification-email/ \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+
+#### JavaScript Example
+```javascript
+const response = await fetch('/api/users/resend-verification-email/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'user@example.com'
+  })
+});
+
+const data = await response.json();
+
+if (response.ok) {
+  console.log('Verification email sent:', data.message);
+  console.log('Attempts remaining:', data.attempts_remaining);
+} else {
+  console.error('Error:', data.error);
+  if (response.status === 429) {
+    console.log('Contact support:', data.support_contact);
+  }
+}
+```
+
+### Related Endpoints
+
+- **Email Verification**: `/api/users/email-verify/<uidb64>/<token>/` - Verify email with token
+- **Encrypted Email Verification**: `/api/users/email-verify/?uid=<uid>&token=<token>` - Verify with encrypted token
+- **User Registration**: `/api/users/register/` - Register new user with automatic verification email
+- **User Login**: `/api/users/login/` - Login endpoint that checks email verification status
+
+### Best Practices
+
+#### Frontend Implementation
+1. **User Feedback**: Provide clear feedback about rate limits and remaining attempts
+2. **Error Handling**: Handle all error cases gracefully with user-friendly messages
+3. **Rate Limit Awareness**: Show users their remaining attempts and reset time
+4. **Support Contact**: Display support contact information when limits are exceeded
+
+#### Backend Considerations
+1. **Email Delivery Monitoring**: Monitor email delivery success rates
+2. **Rate Limit Tuning**: Adjust rate limits based on usage patterns
+3. **Cleanup Tasks**: Implement regular cleanup of old attempt records
+4. **Security Monitoring**: Monitor for abuse patterns and suspicious activity

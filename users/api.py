@@ -9,6 +9,7 @@ from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from users.models import Address
 from .serializers import UserSerializer, AddressSerializer
 from .utils import send_verification_email
+from .email_rate_limit import EmailResendAttempt
 from django.db import IntegrityError, transaction
 from django.utils.timezone import now
 from django.utils.decorators import method_decorator
@@ -77,13 +78,48 @@ class UserRegisterAPIView(views.APIView):
                     if fields:
                         user.save(update_fields=fields)
                     
-                    send_verification_email(user)
-                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+                    # Attempt to send verification email
+                    email_sent_successfully = send_verification_email(user)
+                    
+                    if not email_sent_successfully:
+                        # If email delivery fails, delete the user and return error
+                        user.delete()
+                        logger.error(f"Registration failed for {user.email} due to email delivery failure")
+                        return Response({
+                            "error": "Email delivery failed. Please verify your email address is correct and try again.",
+                            "email_delivery_failed": True
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    # Return success response with user data
+                    response_data = serializer.data.copy()
+                    response_data.update({
+                        "message": "Registration successful. Please check your email for verification instructions.",
+                        "email_sent": True,
+                        "verification_required": True
+                    })
+                    return Response(response_data, status=status.HTTP_201_CREATED)
+                    
                 except IntegrityError as e:
                     # Enhanced error handling for a better user experience
                     if 'phone_number' in str(e):
-                        return Response({"error": "Registration failed, possibly due to duplicate information."}, status=status.HTTP_409_CONFLICT)
-                    return Response({"error": str(e)}, status=status.HTTP_409_CONFLICT)
+                        return Response({
+                            "error": "Registration failed. Phone number already exists.",
+                            "field_error": "phone_number"
+                        }, status=status.HTTP_409_CONFLICT)
+                    elif 'email' in str(e):
+                        return Response({
+                            "error": "Registration failed. Email address already exists.",
+                            "field_error": "email"
+                        }, status=status.HTTP_409_CONFLICT)
+                    elif 'username' in str(e):
+                        return Response({
+                            "error": "Registration failed. Username already exists.",
+                            "field_error": "username"
+                        }, status=status.HTTP_409_CONFLICT)
+                    return Response({
+                        "error": "Registration failed due to duplicate information.",
+                        "details": str(e)
+                    }, status=status.HTTP_409_CONFLICT)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     
@@ -95,14 +131,45 @@ class UserLoginAPIView(views.APIView):
         login = request.data.get('login')
         password = request.data.get('password')
         
+        # Input validation
+        if not login or not password:
+            return Response({
+                "error": "Both login and password are required",
+                "isUserEmailVerified": False
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         user = User.objects.filter(Q(username=login) | Q(phone_number=login) | Q(email=login)).first()
         if not user or not user.check_password(password):
             # Log failed attempt with IP and timestamp
             logging.warning(f"Failed login attempt for user {login} from IP {request.META.get('REMOTE_ADDR', 'unknown')} at {now()}")
-            return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({
+                "error": "Invalid credentials",
+                "isUserEmailVerified": False
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
-        if not user.is_active or (hasattr(user, "is_email_verified") and not user.is_email_verified):
-            return Response({"error": "Please verify your email before logging in."}, status=status.HTTP_403_FORBIDDEN)
+        # Check if user account is active
+        if not user.is_active:
+            return Response({
+                "error": "User account is inactive. Please contact support.",
+                "isUserEmailVerified": getattr(user, 'is_email_verified', False)
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check email verification status
+        is_email_verified = getattr(user, 'is_email_verified', False)
+        if not is_email_verified:
+            # Check if email delivery failed during registration
+            if getattr(user, 'email_failed', False):
+                return Response({
+                    "error": "Email delivery failed during registration. Please verify your email address is correct and try again.",
+                    "isUserEmailVerified": False,
+                    "action_required": "resend_verification_email"
+                }, status=status.HTTP_403_FORBIDDEN)
+            else:
+                return Response({
+                    "error": "Please verify your email before logging in.",
+                    "isUserEmailVerified": False,
+                    "action_required": "check_email_for_verification"
+                }, status=status.HTTP_403_FORBIDDEN)
         
         # Update last_login on successful login
         user.last_login = now()
@@ -113,6 +180,14 @@ class UserLoginAPIView(views.APIView):
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
+            'isUserEmailVerified': True,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name
+            }
         }, status=status.HTTP_200_OK)
 
 
@@ -275,7 +350,7 @@ class ResendVerificationEmailAPIView(APIView):
     
     @method_decorator(production_ratelimit(key='ip', rate='2/m', method='POST'))
     def post(self, request):
-        """Resend verification email to user."""
+        """Resend verification email to user with rate limiting."""
         email = request.data.get('email')
         
         if not email:
@@ -283,18 +358,47 @@ class ResendVerificationEmailAPIView(APIView):
                 'error': 'Email is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Check rate limiting (5 attempts per day per email)
+        can_resend, attempts_today, remaining_attempts = EmailResendAttempt.can_resend_email(email)
+        
+        if not can_resend:
+            # Rate limit exceeded - provide support contact information
+            support_phone = getattr(settings, 'SUPPORT_PHONE_NUMBER', '+91-8758503609')
+            return Response({
+                'error': f'Daily email resend limit exceeded ({attempts_today}/5 attempts used today). Please call support at {support_phone}',
+                'rate_limit_exceeded': True,
+                'attempts_today': attempts_today,
+                'support_phone': support_phone,
+                'reset_time': 'Limit resets at midnight UTC'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            # Don't reveal if email exists or not for security
+            # Record failed attempt for rate limiting but don't reveal if email exists
+            EmailResendAttempt.record_attempt(
+                email=email,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT'),
+                success=False
+            )
             return Response({
-                'message': 'If the email exists in our system, a verification email will be sent.'
+                'message': 'If the email exists in our system, a verification email will be sent.',
+                'remaining_attempts': remaining_attempts - 1
             }, status=status.HTTP_200_OK)
         
         # Check if user is already verified
         if user.is_email_verified:
+            # Record attempt but don't send email
+            EmailResendAttempt.record_attempt(
+                email=email,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT'),
+                success=False
+            )
             return Response({
-                'error': 'Email is already verified'
+                'error': 'Email is already verified',
+                'remaining_attempts': remaining_attempts - 1
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Reset email status flags before resending
@@ -303,15 +407,29 @@ class ResendVerificationEmailAPIView(APIView):
         user.save(update_fields=['email_sent', 'email_failed'])
         
         # Send verification email
-        if send_verification_email(user):
+        email_sent_successfully = send_verification_email(user)
+        
+        # Record the attempt
+        EmailResendAttempt.record_attempt(
+            email=email,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT'),
+            success=email_sent_successfully
+        )
+        
+        if email_sent_successfully:
             logger.info(f"Verification email resent successfully to {user.email}")
             return Response({
-                'message': 'Verification email sent successfully'
+                'message': 'Verification email sent successfully',
+                'remaining_attempts': remaining_attempts - 1,
+                'email_sent': True
             }, status=status.HTTP_200_OK)
         else:
             logger.error(f"Failed to resend verification email to {user.email}")
             return Response({
-                'error': 'Failed to send verification email. Please try again later.'
+                'error': 'Failed to send verification email. Please try again later.',
+                'remaining_attempts': remaining_attempts - 1,
+                'email_sent': False
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

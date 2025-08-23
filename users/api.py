@@ -160,14 +160,16 @@ class UserLoginAPIView(views.APIView):
             # Check if email delivery failed during registration
             if getattr(user, 'email_failed', False):
                 return Response({
-                    "error": "Email delivery failed during registration. Please verify your email address is correct and try again.",
+                    "error": f"Please verify your email at {user.email} before logging in.",
                     "isUserEmailVerified": False,
+                    "stored_email_address": user.email,
                     "action_required": "resend_verification_email"
                 }, status=status.HTTP_403_FORBIDDEN)
             else:
                 return Response({
-                    "error": "Please verify your email before logging in.",
+                    "error": f"Please verify your email at {user.email} before logging in.",
                     "isUserEmailVerified": False,
+                    "stored_email_address": user.email,
                     "action_required": "check_email_for_verification"
                 }, status=status.HTTP_403_FORBIDDEN)
         
@@ -346,17 +348,29 @@ class AddressDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         return obj
 
 class ResendVerificationEmailAPIView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     
     @method_decorator(production_ratelimit(key='ip', rate='2/m', method='POST'))
     def post(self, request):
-        """Resend verification email to user with rate limiting."""
-        email = request.data.get('email')
+        """Resend verification email to authenticated user with enhanced security."""
+        # Get authenticated user - no email parameter needed
+        user = request.user
+        email = user.email
         
+        # Identity verification - ensure user is requesting verification for their own email
         if not email:
             return Response({
-                'error': 'Email is required'
+                'error': 'User account does not have an email address configured',
+                'action_required': 'contact_support'
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if user account is active
+        if not user.is_active:
+            return Response({
+                'error': 'User account is inactive. Please contact support.',
+                'stored_email_address': email,
+                'action_required': 'contact_support'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         # Check rate limiting (5 attempts per day per email)
         can_resend, attempts_today, remaining_attempts = EmailResendAttempt.can_resend_email(email)
@@ -369,23 +383,9 @@ class ResendVerificationEmailAPIView(APIView):
                 'rate_limit_exceeded': True,
                 'attempts_today': attempts_today,
                 'support_phone': support_phone,
-                'reset_time': 'Limit resets at midnight UTC'
+                'reset_time': 'Limit resets at midnight UTC',
+                'stored_email_address': email
             }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-        
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            # Record failed attempt for rate limiting but don't reveal if email exists
-            EmailResendAttempt.record_attempt(
-                email=email,
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT'),
-                success=False
-            )
-            return Response({
-                'message': 'If the email exists in our system, a verification email will be sent.',
-                'remaining_attempts': remaining_attempts - 1
-            }, status=status.HTTP_200_OK)
         
         # Check if user is already verified
         if user.is_email_verified:
@@ -398,8 +398,44 @@ class ResendVerificationEmailAPIView(APIView):
             )
             return Response({
                 'error': 'Email is already verified',
+                'stored_email_address': email,
                 'remaining_attempts': remaining_attempts - 1
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Handle edge case: Check if email delivery failed during registration
+        if getattr(user, 'email_failed', False):
+            # Reset email status flags before resending
+            user.email_sent = False
+            user.email_failed = False
+            user.save(update_fields=['email_sent', 'email_failed'])
+            
+            # Send verification email
+            email_sent_successfully = send_verification_email(user)
+            
+            # Record the attempt
+            EmailResendAttempt.record_attempt(
+                email=email,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT'),
+                success=email_sent_successfully
+            )
+            
+            if email_sent_successfully:
+                return Response({
+                    'message': f'Please verify your email at {email} before logging in.',
+                    'stored_email_address': email,
+                    'email_sent': True,
+                    'verification_required': True,
+                    'remaining_attempts': remaining_attempts - 1
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'error': 'Failed to send verification email. Please try again later or contact support.',
+                    'stored_email_address': email,
+                    'email_sent': False,
+                    'action_required': 'contact_support',
+                    'remaining_attempts': remaining_attempts - 1
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Reset email status flags before resending
         user.email_sent = False
@@ -420,16 +456,20 @@ class ResendVerificationEmailAPIView(APIView):
         if email_sent_successfully:
             logger.info(f"Verification email resent successfully to {user.email}")
             return Response({
-                'message': 'Verification email sent successfully',
-                'remaining_attempts': remaining_attempts - 1,
-                'email_sent': True
+                'message': f'Please verify your email at {email} before logging in.',
+                'stored_email_address': email,
+                'email_sent': True,
+                'verification_required': True,
+                'remaining_attempts': remaining_attempts - 1
             }, status=status.HTTP_200_OK)
         else:
             logger.error(f"Failed to resend verification email to {user.email}")
             return Response({
-                'error': 'Failed to send verification email. Please try again later.',
-                'remaining_attempts': remaining_attempts - 1,
-                'email_sent': False
+                'error': 'Failed to send verification email. Please try again later or contact support.',
+                'stored_email_address': email,
+                'email_sent': False,
+                'action_required': 'contact_support',
+                'remaining_attempts': remaining_attempts - 1
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

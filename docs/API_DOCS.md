@@ -2788,30 +2788,36 @@ Address these before deploying to production to ensure security and functionalit
 ### Endpoint
 - **URL**: `/api/users/resend-verification-email/`
 - **Method**: `POST`
-- **Auth Required**: No (AllowAny)
+- **Auth Required**: Yes (JWT Token)
 - **Rate Limiting**: 2 requests per minute per IP address
-- **Description**: Resends email verification link to users who haven't verified their email address
+- **Description**: Resends email verification link to authenticated users who haven't verified their email address
 
 ### Purpose
-This endpoint allows users to request a new verification email if:
+This endpoint allows authenticated users to request a new verification email for their account if:
 - Their original verification email was not received
 - The verification link has expired
 - They need to resend the verification for any reason
 
-The endpoint implements rate limiting (5 attempts per day per email address) to prevent abuse and includes comprehensive error handling for various scenarios.
+The endpoint implements rate limiting (5 attempts per day per email address) to prevent abuse and includes comprehensive error handling for various scenarios. The endpoint automatically uses the authenticated user's email address for identity verification.
+
+### Authentication
+This endpoint requires a valid JWT token in the Authorization header:
+```
+Authorization: Bearer <your_jwt_token>
+```
 
 ### Request Format
 
 #### Required Parameters
 ```json
-{
-    "email": "user@example.com"
-}
+{}
 ```
+*Note: No request body parameters are required. The endpoint automatically uses the authenticated user's email address.*
 
 #### Request Headers
 ```
 Content-Type: application/json
+Authorization: Bearer <your_jwt_token>
 ```
 
 ### Response Formats
@@ -2819,9 +2825,11 @@ Content-Type: application/json
 #### Success Response (200 OK)
 ```json
 {
-    "message": "Verification email sent successfully",
-    "email": "user@example.com",
-    "attempts_remaining": 4
+    "message": "Please verify your email at user@example.com before logging in.",
+    "stored_email_address": "user@example.com",
+    "email_sent": true,
+    "verification_required": true,
+    "remaining_attempts": 4
 }
 ```
 
@@ -2835,42 +2843,53 @@ Content-Type: application/json
 }
 ```
 
-#### Email Delivery Failed (400 Bad Request)
+#### Email Delivery Failed (500 Internal Server Error)
 ```json
 {
     "error": "Failed to send verification email. Please try again later or contact support.",
-    "email": "user@example.com",
-    "attempts_remaining": 3
+    "stored_email_address": "user@example.com",
+    "email_sent": false,
+    "action_required": "contact_support",
+    "remaining_attempts": 3
 }
 ```
 
-#### User Not Found (400 Bad Request)
+#### User Account Inactive (403 Forbidden)
 ```json
 {
-    "error": "No user found with this email address",
-    "email": "nonexistent@example.com"
+    "error": "User account is inactive. Please contact support.",
+    "email_sent": false
 }
 ```
 
 #### Email Already Verified (400 Bad Request)
 ```json
 {
-    "error": "Email is already verified",
-    "email": "verified@example.com"
+    "error": "Email address is already verified.",
+    "stored_email_address": "user@example.com",
+    "email_sent": false
 }
 ```
 
-#### Invalid Email Format (400 Bad Request)
+#### Authentication Required (401 Unauthorized)
 ```json
 {
-    "error": "Please provide a valid email address"
+    "detail": "Authentication credentials were not provided."
 }
 ```
 
-#### Missing Email Parameter (400 Bad Request)
+#### Invalid Token (401 Unauthorized)
 ```json
 {
-    "error": "Email address is required"
+    "detail": "Given token not valid for any token type",
+    "code": "token_not_valid",
+    "messages": [
+        {
+            "token_class": "AccessToken",
+            "token_type": "access",
+            "message": "Token is invalid or expired"
+        }
+    ]
 }
 ```
 
@@ -2879,9 +2898,11 @@ Content-Type: application/json
 | Status Code | Error Type | Description |
 |-------------|------------|-------------|
 | 200 | Success | Verification email sent successfully |
-| 400 | Bad Request | Invalid email, user not found, already verified, or email delivery failed |
+| 400 | Bad Request | Email already verified |
+| 401 | Unauthorized | Authentication credentials not provided or invalid token |
+| 403 | Forbidden | User account is inactive |
 | 429 | Too Many Requests | Daily rate limit exceeded (5 attempts per day) |
-| 500 | Internal Server Error | Server error during email sending |
+| 500 | Internal Server Error | Email delivery failed |
 
 ### Rate Limiting Details
 
@@ -2942,34 +2963,39 @@ Content-Type: application/json
 
 #### cURL Example
 ```bash
+# First, obtain JWT token by logging in
+TOKEN="your_jwt_access_token_here"
+
 curl -X POST \
   http://localhost:8000/api/users/resend-verification-email/ \
   -H 'Content-Type: application/json' \
-  -d '{
-    "email": "user@example.com"
-  }'
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 #### JavaScript Example
 ```javascript
+// Assuming you have the JWT token stored (e.g., in localStorage)
+const token = localStorage.getItem('access_token');
+
 const response = await fetch('/api/users/resend-verification-email/', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    email: 'user@example.com'
-  })
+    'Authorization': `Bearer ${token}`
+  }
 });
 
 const data = await response.json();
 
 if (response.ok) {
   console.log('Verification email sent:', data.message);
-  console.log('Attempts remaining:', data.attempts_remaining);
+  console.log('Email address:', data.stored_email_address);
+  console.log('Remaining attempts:', data.remaining_attempts);
 } else {
   console.error('Error:', data.error);
-  if (response.status === 429) {
+  if (response.status === 401) {
+    console.log('Authentication required - please log in');
+  } else if (response.status === 429) {
     console.log('Contact support:', data.support_contact);
   }
 }

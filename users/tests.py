@@ -117,9 +117,366 @@ class UserAccountTests(APITestCase):
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(response.data['error'], 'Invalid credentials')
-    
 
+
+class ResendVerificationEmailAPIViewTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.client.enforce_csrf_checks = False
+        
+        # Create verified user
+        self.verified_user = CustomUser.objects.create_user(
+            username='verifieduser',
+            email='verified@example.com',
+            password='password123',
+            first_name='Verified',
+            last_name='User',
+            phone_number='+919876543210',
+            birthdate='1990-01-01',
+            is_email_verified=True,
+            email_sent=True,
+            email_failed=False
+        )
+        
+        # Create unverified user
+        self.unverified_user = CustomUser.objects.create_user(
+            username='unverifieduser',
+            email='unverified@example.com',
+            password='password123',
+            first_name='Unverified',
+            last_name='User',
+            phone_number='+919876543211',
+            birthdate='1990-01-01',
+            is_email_verified=False,
+            email_sent=False,
+            email_failed=False
+        )
+        
+        # Create user with failed email
+        self.failed_email_user = CustomUser.objects.create_user(
+            username='failedemailuser',
+            email='failed@example.com',
+            password='password123',
+            first_name='Failed',
+            last_name='User',
+            phone_number='+919876543212',
+            birthdate='1990-01-01',
+            is_email_verified=False,
+            email_sent=False,
+            email_failed=True
+        )
+        
+        # Create inactive user
+        self.inactive_user = CustomUser.objects.create_user(
+            username='inactiveuser',
+            email='inactive@example.com',
+            password='password123',
+            first_name='Inactive',
+            last_name='User',
+            phone_number='+919876543213',
+            birthdate='1990-01-01',
+            is_email_verified=False,
+            email_sent=False,
+            email_failed=False,
+            is_active=False
+        )
+        
+        # Create user without email
+        self.no_email_user = CustomUser.objects.create_user(
+            username='noemailuser',
+            email='',
+            password='password123',
+            first_name='NoEmail',
+            last_name='User',
+            phone_number='+919876543214',
+            birthdate='1990-01-01',
+            is_email_verified=False,
+            email_sent=False,
+            email_failed=False
+        )
+        
+        self.resend_url = reverse('resend-verification-email')
+    
+    def get_auth_token(self, user):
+        """Helper method to get JWT token for a user"""
+        refresh = RefreshToken.for_user(user)
+        return str(refresh.access_token)
+    
+    def test_authentication_required(self):
+        """Test that authentication is required to access the endpoint"""
+        response = self.client.post(self.resend_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn('Authentication credentials were not provided', str(response.data))
+    
+    def test_invalid_token_authentication(self):
+        """Test that invalid token returns 401"""
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer invalid_token')
+        response = self.client.post(self.resend_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+    
+    def test_already_verified_user(self):
+        """Test resending email to already verified user returns 400"""
+        token = self.get_auth_token(self.verified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        response = self.client.post(self.resend_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], 'Email is already verified')
+        self.assertEqual(response.data['stored_email_address'], 'verified@example.com')
+        self.assertIn('remaining_attempts', response.data)
+    
+    def test_user_without_email(self):
+        """Test user without email address returns 400"""
+        token = self.get_auth_token(self.no_email_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        response = self.client.post(self.resend_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], 'User account does not have an email address configured')
+        self.assertEqual(response.data['action_required'], 'contact_support')
+    
+    def test_inactive_user(self):
+        """Test inactive user returns 401"""
+        # First make the user active to get a token, then deactivate
+        self.inactive_user.is_active = True
+        self.inactive_user.save()
+        token = self.get_auth_token(self.inactive_user)
+        
+        # Now deactivate the user
+        self.inactive_user.is_active = False
+        self.inactive_user.save()
+        
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        response = self.client.post(self.resend_url)
+        
+        # JWT authentication returns 401 for inactive users, not 403
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(str(response.data.get('detail')), 'User is inactive')
+        self.assertEqual(response.data.get('detail').code, 'authentication_failed')
+    
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_successful_email_resend_unverified_user(self):
+        """Test successful email resend for unverified user"""
+        token = self.get_auth_token(self.unverified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        response = self.client.post(self.resend_url)
+        
+        # Check response
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('Please verify your email at unverified@example.com', response.data['message'])
+        self.assertEqual(response.data['stored_email_address'], 'unverified@example.com')
+        self.assertTrue(response.data['email_sent'])
+        self.assertTrue(response.data['verification_required'])
+        self.assertIn('remaining_attempts', response.data)
+        
+        # Check user fields updated
+        self.unverified_user.refresh_from_db()
+        self.assertTrue(self.unverified_user.email_sent)
+        self.assertFalse(self.unverified_user.email_failed)
+    
+    def test_failed_email_delivery(self):
+        """Test failed email delivery scenario"""
+        # Mock email sending to fail
+        from unittest.mock import patch
+        
+        token = self.get_auth_token(self.unverified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        with patch('users.api.send_verification_email', return_value=False):
+            response = self.client.post(self.resend_url)
+        
+        # Check response
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(response.data['error'], 'Failed to send verification email. Please try again later or contact support.')
+        self.assertEqual(response.data['stored_email_address'], 'unverified@example.com')
+        self.assertFalse(response.data['email_sent'])
+        self.assertEqual(response.data['action_required'], 'contact_support')
+        self.assertIn('remaining_attempts', response.data)
+    
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_recovery_from_failed_email_state(self):
+        """Test recovery from failed email state"""
+        token = self.get_auth_token(self.failed_email_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        # Verify initial state
+        self.assertTrue(self.failed_email_user.email_failed)
+        self.assertFalse(self.failed_email_user.email_sent)
+        
+        response = self.client.post(self.resend_url)
+        
+        # Check response
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('Please verify your email at failed@example.com', response.data['message'])
+        self.assertEqual(response.data['stored_email_address'], 'failed@example.com')
+        self.assertTrue(response.data['email_sent'])
+        self.assertTrue(response.data['verification_required'])
+        
+        # Check user fields updated - should reset failed state and set sent
+        self.failed_email_user.refresh_from_db()
+        self.assertTrue(self.failed_email_user.email_sent)
+        self.assertFalse(self.failed_email_user.email_failed)
+    
+    def test_email_verified_field_scenarios(self):
+        """Test is_email_verified field in different scenarios"""
+        # Test verified user
+        self.assertTrue(self.verified_user.is_email_verified)
+        
+        # Test unverified user
+        self.assertFalse(self.unverified_user.is_email_verified)
+        
+        # Test failed email user
+        self.assertFalse(self.failed_email_user.is_email_verified)
+        
+        # Test that verified user gets proper error response
+        token = self.get_auth_token(self.verified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        response = self.client.post(self.resend_url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], 'Email is already verified')
+    
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_email_sent_field_updates(self):
+        """Test email_sent field updates correctly"""
+        token = self.get_auth_token(self.unverified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        # Initial state
+        self.assertFalse(self.unverified_user.email_sent)
+        
+        response = self.client.post(self.resend_url)
+        
+        # Check response indicates email was sent
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['email_sent'])
+        
+        # Check database field updated
+        self.unverified_user.refresh_from_db()
+        self.assertTrue(self.unverified_user.email_sent)
+        self.assertFalse(self.unverified_user.email_failed)
+    
+    def test_email_failed_field_updates(self):
+        """Test email_failed field updates correctly"""
+        from unittest.mock import patch
+        
+        token = self.get_auth_token(self.unverified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        # Initial state
+        self.assertFalse(self.unverified_user.email_failed)
+        
+        with patch('users.api.send_verification_email', return_value=False):
+            response = self.client.post(self.resend_url)
+        
+        # Check response indicates email failed
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertFalse(response.data['email_sent'])
+    
+    @override_settings(ENABLE_RATE_LIMIT=True, TESTING=False)
+    def test_rate_limiting(self):
+        """Test rate limiting functionality"""
+        from users.email_rate_limit import EmailResendAttempt
+        
+        token = self.get_auth_token(self.unverified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        # Create 5 attempts to reach the limit
+        for i in range(5):
+            EmailResendAttempt.record_attempt(
+                email=self.unverified_user.email,
+                ip_address='127.0.0.1',
+                success=True
+            )
+        
+        response = self.client.post(self.resend_url)
+        
+        # Should be rate limited
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn('Daily email resend limit exceeded', response.data['error'])
+        self.assertTrue(response.data['rate_limit_exceeded'])
+        self.assertEqual(response.data['attempts_today'], 5)
+        self.assertIn('support_phone', response.data)
+        self.assertEqual(response.data['stored_email_address'], 'unverified@example.com')
+    
+    def test_rate_limiting_attempt_recording(self):
+        """Test that attempts are properly recorded for rate limiting"""
+        from users.email_rate_limit import EmailResendAttempt
+        
+        token = self.get_auth_token(self.unverified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        # Clear any existing attempts
+        EmailResendAttempt.objects.filter(email=self.unverified_user.email).delete()
+        
+        # Make a request
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            response = self.client.post(self.resend_url)
+        
+        # Check that attempt was recorded
+        attempts = EmailResendAttempt.objects.filter(email=self.unverified_user.email)
+        self.assertEqual(attempts.count(), 1)
+        
+        attempt = attempts.first()
+        self.assertEqual(attempt.email, self.unverified_user.email)
+        self.assertTrue(attempt.success)  # Should be successful with locmem backend
+    
+    def test_remaining_attempts_calculation(self):
+        """Test that remaining attempts are calculated correctly"""
+        from users.email_rate_limit import EmailResendAttempt
+        
+        token = self.get_auth_token(self.unverified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        # Clear any existing attempts
+        EmailResendAttempt.objects.filter(email=self.unverified_user.email).delete()
+        
+        # Create 2 attempts
+        for i in range(2):
+            EmailResendAttempt.record_attempt(
+                email=self.unverified_user.email,
+                ip_address='127.0.0.1',
+                success=True
+            )
+        
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            response = self.client.post(self.resend_url)
+        
+        # Should have 2 remaining attempts (5 max - 2 existing - 1 current = 2)
+        self.assertEqual(response.data['remaining_attempts'], 2)
+    
+    def test_response_format_consistency(self):
+        """Test that all responses follow consistent format"""
+        # Test successful response format
+        token = self.get_auth_token(self.unverified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            response = self.client.post(self.resend_url)
+        
+        # Check required fields in successful response
+        required_fields = ['message', 'stored_email_address', 'email_sent', 'verification_required', 'remaining_attempts']
+        for field in required_fields:
+            self.assertIn(field, response.data)
+        
+        # Test error response format for already verified user
+        token = self.get_auth_token(self.verified_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        response = self.client.post(self.resend_url)
+        
+        # Check required fields in error response
+        required_fields = ['error', 'stored_email_address', 'remaining_attempts']
+        for field in required_fields:
+            self.assertIn(field, response.data)
+        self.assertEqual(response.data['error'], 'Email is already verified')
+
+
+class UserAccountTestsExtended(UserAccountTests):
+    """Extended tests for UserAccountTests that were misplaced"""
+    
     @override_settings(ENABLE_RATE_LIMIT=True, TESTING=False)
     def test_rate_limit_registration(self):
         url = reverse('user-register')

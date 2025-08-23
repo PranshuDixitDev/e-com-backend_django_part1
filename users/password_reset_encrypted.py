@@ -44,9 +44,14 @@ class PasswordResetConfirmEncrypted(APIView):
             )
         
         try:
-            # Decode user ID
-            uid = force_str(urlsafe_base64_decode(uid_param))
-            user = User.objects.get(pk=uid)
+            # Decode user ID using the new decode function
+            from .utils import decode_user_uid
+            try:
+                user_id = decode_user_uid(uid_param)
+            except ValueError:
+                # Fallback to old method for backward compatibility
+                user_id = force_str(urlsafe_base64_decode(uid_param))
+            user = User.objects.get(pk=user_id)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             return Response(
                 {'error': 'Invalid user ID'}, 

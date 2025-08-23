@@ -33,6 +33,7 @@ from django.template.loader import render_to_string
 from django.core.mail import EmailMultiAlternatives
 from functools import wraps
 import requests
+from .utils import decode_user_uid
 
 logger = logging.getLogger(__name__)
 
@@ -319,8 +320,13 @@ class VerifyEmail(APIView):
 
     def get(self, request, uidb64, token):
         try:
-            uid = force_str(urlsafe_base64_decode(uidb64))
-            user = User.objects.get(pk=uid)
+            # Decode user ID using the new decode function
+            try:
+                user_id = decode_user_uid(uidb64)
+            except ValueError:
+                # Fallback to old method for backward compatibility
+                user_id = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=user_id)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             user = None
 

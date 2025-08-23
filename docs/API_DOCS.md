@@ -341,9 +341,11 @@ curl -s -X POST "$BASE/api/users/logout/" \
 
 - After registration, a verification email is sent with an encrypted link pointing to the frontend.
 - The frontend should capture `uid` and `token` from the query string and call the backend verification endpoint.
+- **UID Format**: The system generates UIDs by prefixing user IDs with 'u' before base64 encoding (e.g., user ID 4 becomes 'u4' → 'dTQ' after encoding) to ensure readable and unambiguous identifiers.
 - **URL (Backend)**: `/api/users/email-verify/` (GET)
 - **Query Params**: `uid`, `token`
 - Legacy path-based endpoint (also supported): `/api/users/email-verify/<uidb64>/<token>/`
+- **Backward Compatibility**: The system supports both new prefixed UIDs and legacy UIDs for seamless migration.
 - **Success Response (200 OK)**:
 ```json
 {

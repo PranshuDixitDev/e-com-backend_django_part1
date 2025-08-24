@@ -64,69 +64,20 @@ class PasswordResetConfirmEncrypted(APIView):
                 'action_required': 'request_new_reset_link'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if user is active and email is verified
-        if not user.is_active:
-            return Response({
-                'error': 'User account is inactive',
-                'details': 'This account has been deactivated. Please contact support for assistance.',
-                'action_required': 'contact_support',
-                'support_phone': getattr(settings, 'SUPPORT_PHONE_NUMBER', '+91-8758503609')
-            }, status=status.HTTP_403_FORBIDDEN)
+        # Check user status conditions for password reset access
+        # Required conditions: email_verified=True, email_sent=True, email_failed=False, is_active=True
+        email_verified = getattr(user, 'is_email_verified', False)
+        email_sent = getattr(user, 'email_sent', False)
+        email_failed = getattr(user, 'email_failed', False)
+        is_active = user.is_active
         
-        if not user.is_email_verified:
-            # Enhanced handling for newly registered users with unverified emails
-            # Check if this is a recently registered user (within last 24 hours)
-            from django.utils import timezone
-            from datetime import timedelta
-            
-            is_newly_registered = (
-                user.date_joined and 
-                timezone.now() - user.date_joined < timedelta(hours=24)
-            )
-            
-            # Check if email delivery failed during registration
-            email_failed = getattr(user, 'email_failed', False)
-            
-            response_data = {
-                'error': 'Email must be verified before password reset',
-                'details': f'Please verify your email at {user.email} before resetting your password',
-                'stored_email_address': user.email,
-                'action_required': 'verify_email_first',
-                'verification_status': {
-                    'is_newly_registered': is_newly_registered,
-                    'email_failed': email_failed,
-                    'registration_date': user.date_joined.isoformat() if user.date_joined else None
-                }
-            }
-            
-            # Provide specific guidance based on user status
-            if is_newly_registered:
-                if email_failed:
-                    response_data['guidance'] = {
-                        'message': 'Email delivery failed during registration. Please resend verification email.',
-                        'recommended_action': 'resend_verification_email',
-                        'login_hint': 'Try logging in first to get a verification token, then use the resend endpoint'
-                    }
-                else:
-                    response_data['guidance'] = {
-                        'message': 'Please check your email for the verification link sent during registration.',
-                        'recommended_action': 'check_email_inbox',
-                        'fallback_action': 'resend_verification_email_if_needed'
-                    }
-            else:
-                response_data['guidance'] = {
-                    'message': 'Your account requires email verification before password reset.',
-                    'recommended_action': 'login_and_resend_verification',
-                    'security_note': 'This protects your account from unauthorized password changes'
-                }
-            
-            # Add support contact for edge cases
-            response_data['support'] = {
-                'phone': getattr(settings, 'SUPPORT_PHONE_NUMBER', '+91-8758503609'),
-                'note': 'Contact support if you continue to experience issues'
-            }
-            
-            return Response(response_data, status=status.HTTP_403_FORBIDDEN)
+        # If any condition is not met, return "user doesn't exist" message
+        if not (email_verified and email_sent and not email_failed and is_active):
+            return Response({
+                'error': 'User doesn\'t exist',
+                'details': 'No user found with the provided credentials or user account is not eligible for password reset',
+                'action_required': 'verify_user_status'
+            }, status=status.HTTP_404_NOT_FOUND)
 
         # Validate token using unified validator
         if TokenValidator.validate_token(token_param, user, 'password_reset', check_reuse=True):
@@ -142,29 +93,29 @@ class PasswordResetConfirmEncrypted(APIView):
 
     def _reset_password(self, user, data, token_param=None):
         """Reset user password with enhanced validation."""
-        new_password1 = data.get('new_password1')
-        new_password2 = data.get('new_password2')
+        new_password = data.get('new_password')
+        re_enter_password = data.get('re_enter_password')
         
         # Validate required fields
-        if not new_password1 or not new_password2:
+        if not new_password or not re_enter_password:
             return Response({
                 'error': 'Both password fields are required',
-                'details': 'Please provide both new_password1 and new_password2 fields',
-                'required_fields': ['new_password1', 'new_password2'],
+                'details': 'Please provide both new_password and re_enter_password fields',
+                'required_fields': ['new_password', 're_enter_password'],
                 'action_required': 'provide_passwords'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Validate password confirmation matching
-        if new_password1 != new_password2:
+        if new_password != re_enter_password:
             return Response({
                 'error': 'Password confirmation does not match',
-                'details': 'The password and confirmation password must be identical',
+                'details': 'The new password and re-entered password must be identical',
                 'action_required': 'match_passwords'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Validate password strength
         try:
-            validate_password(new_password1, user)
+            validate_password(new_password, user)
         except ValidationError as e:
             return Response({
                 'error': 'Password validation failed',
@@ -180,7 +131,12 @@ class PasswordResetConfirmEncrypted(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Use Django's SetPasswordForm for final validation and saving
-        form = SetPasswordForm(user, data)
+        # Convert new field names to Django's expected format
+        form_data = {
+            'new_password1': new_password,
+            'new_password2': re_enter_password
+        }
+        form = SetPasswordForm(user, form_data)
         if form.is_valid():
             # Store old password hash for token invalidation tracking
             old_password_hash = user.password

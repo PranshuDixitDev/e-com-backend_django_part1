@@ -1079,16 +1079,25 @@ Authorization: Bearer [access_token]
 {
   "uid": "base64-encoded-user-id",
   "token": "encrypted-or-django-token",
-  "new_password1": "newpassword123",
-  "new_password2": "newpassword123"
+  "new_password": "newpassword123",
+  "re_enter_password": "newpassword123"
 }
 ```
 
 #### Parameter Details
 - `uid`: Base64 encoded user ID (can be passed in URL, query params, or request body)
 - `token`: Encrypted Fernet token or traditional Django token
-- `new_password1`: New password (must meet strength requirements)
-- `new_password2`: Password confirmation (must match new_password1)
+- `new_password`: New password (must meet strength requirements)
+- `re_enter_password`: Password confirmation (must match new_password)
+
+#### User Status Requirements
+For a user to be eligible for password reset, they must meet the following criteria:
+- `email_verified`: Must be `True` (user has verified their email)
+- `email_sent`: Must be `True` (password reset email was sent)
+- `email_failed`: Must be `False` (email delivery was successful)
+- `is_active`: Must be `True` (user account is active)
+
+If any of these conditions are not met, the endpoint will return a "User doesn't exist" error.
 
 ### Response Formats
 
@@ -1130,14 +1139,19 @@ Authorization: Bearer [access_token]
 #### Missing Password Fields (400 Bad Request)
 ```json
 {
-  "error": "Both password fields are required"
+  "error": "Both password fields are required",
+  "details": "Please provide both new_password and re_enter_password fields",
+  "required_fields": ["new_password", "re_enter_password"],
+  "action_required": "provide_passwords"
 }
 ```
 
 #### Password Mismatch (400 Bad Request)
 ```json
 {
-  "error": "Password confirmation does not match"
+  "error": "Password confirmation does not match",
+  "details": "The new password and re-entered password must be identical",
+  "action_required": "match_passwords"
 }
 ```
 
@@ -1159,13 +1173,24 @@ Authorization: Bearer [access_token]
 }
 ```
 
+#### User Status Validation Error (404 Not Found)
+```json
+{
+  "error": "User doesn't exist",
+  "details": "No user found with the provided credentials or user account is not eligible for password reset",
+  "action_required": "verify_user_status"
+}
+```
+
 #### Form Validation Error (400 Bad Request)
 ```json
 {
   "error": "Password reset failed",
-  "details": {
-    "new_password1": ["This field is required."]
-  }
+  "details": "An unexpected error occurred during password reset",
+  "form_errors": {
+    "new_password": ["This field is required."]
+  },
+  "action_required": "retry_password_reset"
 }
 ```
 
@@ -1217,14 +1242,14 @@ curl -X POST \
   -d '{
     "uid": "MQ",
     "token": "encrypted_token_here",
-    "new_password1": "SecurePassword123!",
-    "new_password2": "SecurePassword123!"
+    "new_password": "SecurePassword123!",
+    "re_enter_password": "SecurePassword123!"
   }'
 ```
 
 #### JavaScript Example
 ```javascript
-const resetPassword = async (uid, token, password1, password2) => {
+const resetPassword = async (uid, token, newPassword, reEnterPassword) => {
   try {
     const response = await fetch('/api/users/password-reset/confirm/', {
       method: 'POST',
@@ -1234,8 +1259,8 @@ const resetPassword = async (uid, token, password1, password2) => {
       body: JSON.stringify({
         uid: uid,
         token: token,
-        new_password1: password1,
-        new_password2: password2
+        new_password: newPassword,
+        re_enter_password: reEnterPassword
       })
     });
     

@@ -80,7 +80,7 @@ def send_verification_email(user):
         token = email_verification_token.make_token(user)
         
         # Backend confirm path (unchanged for compatibility)
-        backend_confirm = reverse('email-verify', kwargs={'uidb64': uid, 'token': token})
+        backend_confirm = reverse('email-verify-legacy', kwargs={'uidb64': uid, 'token': token})
         
         # Create backend API verification link that directly verifies the email
         # Use the current domain for the backend API endpoint

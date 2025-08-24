@@ -4,7 +4,92 @@
 This document describes the endpoints available in the MyEcommerce API and how to interact with them.
 
 ## Authentication
-This API uses JWT (JSON Web Tokens) for authentication. To access protected endpoints, you need to include the JWT token in the `Authorization` header of your requests. Tokens can be obtained by logging in through the provided login endpoint.
+This API uses JWT (JSON Web Tokens) for authentication with enhanced support for unverified users. The authentication flow varies based on the user's email verification status:
+
+### Authentication Flow Overview
+
+#### For Verified Users
+- Standard JWT tokens (`access` and `refresh`) are provided upon login
+- Full access to all protected endpoints
+- Standard token refresh mechanism
+
+#### For Unverified Users
+- Special verification tokens (`verification_token` and `refresh_token`) are provided upon login
+- Limited access - can only use resend verification email endpoint
+- Must verify email to gain full access
+
+### Token Usage
+To access protected endpoints, include the appropriate JWT token in the `Authorization` header:
+```
+Authorization: Bearer [token]
+```
+
+### Frontend Implementation Guide
+
+#### Handling Login Response
+```javascript
+const handleLogin = async (credentials) => {
+  const response = await fetch('/api/users/login/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials)
+  });
+  
+  const data = await response.json();
+  
+  if (data.access && data.refresh) {
+    // Verified user - store standard tokens
+    localStorage.setItem('access_token', data.access);
+    localStorage.setItem('refresh_token', data.refresh);
+    localStorage.setItem('user_verified', 'true');
+  } else if (data.verification_token && data.refresh_token) {
+    // Unverified user - store verification tokens
+    localStorage.setItem('verification_token', data.verification_token);
+    localStorage.setItem('refresh_token', data.refresh_token);
+    localStorage.setItem('user_verified', 'false');
+    // Show verification prompt to user
+  }
+};
+```
+
+#### Making Authenticated Requests
+```javascript
+const makeAuthenticatedRequest = async (url, options = {}) => {
+  const isVerified = localStorage.getItem('user_verified') === 'true';
+  const token = isVerified 
+    ? localStorage.getItem('access_token')
+    : localStorage.getItem('verification_token');
+  
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+```
+
+#### Resending Verification Email
+```javascript
+const resendVerificationEmail = async () => {
+  const verificationToken = localStorage.getItem('verification_token');
+  
+  if (!verificationToken) {
+    throw new Error('No verification token available');
+  }
+  
+  const response = await fetch('/api/users/resend-verification-email/', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${verificationToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  return response.json();
+};
+```
 
 
 ### Obtaining Tokens
@@ -106,16 +191,40 @@ curl -G "$BASE/api/users/email-verify/" \
   --data-urlencode "token=$TOKEN"
 ```
 
+2a) Resend verification email (for unverified users)
+
+- If you need to resend the verification email, use the verification token from login:
+```bash
+# Only if user is unverified and has verification_token
+if [ "$VERIFICATION_TOKEN" != "null" ] && [ "$VERIFICATION_TOKEN" != "" ]; then
+    curl -s -X POST "$BASE/api/users/resend-verification-email/" \
+      -H "Authorization: Bearer $VERIFICATION_TOKEN" \
+      -H "Content-Type: application/json"
+fi
+```
+
 3) Login to obtain JWT tokens
 
 ```bash
 LOGIN_PAYLOAD='{ "login": "'"$USERNAME"'", "password": "'"$PASSWORD"'" }'
 TOKENS=$(curl -s -X POST "$BASE/api/users/login/" -H "Content-Type: application/json" -d "$LOGIN_PAYLOAD")
-ACCESS=$(echo "$TOKENS" | jq -r .access)
-REFRESH=$(echo "$TOKENS" | jq -r .refresh)
-# If jq is not available, copy values manually from the response JSON
 
-AUTH_HEADER="Authorization: Bearer $ACCESS"
+# For verified users
+ACCESS=$(echo "$TOKENS" | jq -r .access 2>/dev/null)
+REFRESH=$(echo "$TOKENS" | jq -r .refresh 2>/dev/null)
+
+# For unverified users
+VERIFICATION_TOKEN=$(echo "$TOKENS" | jq -r .verification_token 2>/dev/null)
+REFRESH_TOKEN=$(echo "$TOKENS" | jq -r .refresh_token 2>/dev/null)
+
+# Set appropriate auth header based on user status
+if [ "$ACCESS" != "null" ] && [ "$ACCESS" != "" ]; then
+    AUTH_HEADER="Authorization: Bearer $ACCESS"
+else
+    AUTH_HEADER="Authorization: Bearer $VERIFICATION_TOKEN"
+fi
+
+# If jq is not available, copy values manually from the response JSON
 ```
 
 4) Create a shipping address (optional if provided during registration)
@@ -314,28 +423,42 @@ curl -s -X POST "$BASE/api/users/logout/" \
 * **URL**: `/api/users/login/`
 * **Method**: `POST`
 * **Authentication Required**: No
+* **Description**: Authenticates users and returns appropriate tokens based on email verification status
 * **Data Constraints (Request Body):**
-
 
 ```json
 {
   "login": "[username, email, or phone number]",
   "password": "[password]"
 }
-`````
+```
 
-### Success Response (Code: 200 OK)
-
-
+### Success Response for Verified Users (Code: 200 OK)
 
 ```json
 {
   "refresh": "[refresh token]",
   "access": "[access token]"
 }
+```
 
+### Success Response for Unverified Users (Code: 200 OK)
 
-  ```
+```json
+{
+  "verification_token": "[verification token for unverified users]",
+  "refresh_token": "[refresh token]",
+  "message": "Please verify your email to access all features"
+}
+```
+
+### Error Response (Code: 400 Bad Request)
+
+```json
+{
+  "error": "Invalid credentials"
+}
+```
 
 ### Email Verification
 
@@ -351,6 +474,57 @@ curl -s -X POST "$BASE/api/users/logout/" \
 {
   "message": "Email verified successfully!",
   "detail": "Your account has been activated and email verified."
+}
+```
+
+### Resend Verification Email
+
+- **URL**: `/api/users/resend-verification-email/`
+- **Method**: `POST`
+- **Auth Required**: Yes (Token-based authentication for unverified users)
+- **Description**: Resends verification email for unverified users using token-based authentication
+- **Headers**:
+```json
+{
+  "Authorization": "Bearer [verification_token]"
+}
+```
+
+#### Success Response (200 OK)
+```json
+{
+  "message": "Verification email sent successfully",
+  "detail": "Please check your email for the verification link"
+}
+```
+
+#### Error Responses
+
+**Invalid Token (401 Unauthorized)**
+```json
+{
+  "detail": "Invalid token."
+}
+```
+
+**User Already Verified (400 Bad Request)**
+```json
+{
+  "error": "Email is already verified"
+}
+```
+
+**Rate Limited (429 Too Many Requests)**
+```json
+{
+  "error": "Rate limit exceeded. Please try again later."
+}
+```
+
+**Email Delivery Failed (500 Internal Server Error)**
+```json
+{
+  "error": "Failed to send verification email. Please try again later."
 }
 ```
 
@@ -822,22 +996,204 @@ Authorization: Bearer [access_token]
 
 ## Confirm Password Reset
 
-- This endpoint supports both traditional Django tokens and encrypted tokens sent via email. If using the encrypted link, the frontend will call this endpoint with uid and token as query parameters.
-- **URL**: `/api/users/password_reset/confirm/`
+### Endpoint
+- **URL**: `/api/users/password-reset/confirm/`
 - **Method**: `POST`
 - **Auth Required**: No
-- **Request Body**:
+- **Rate Limiting**: 2 requests per minute per IP address
+- **Description**: Confirms password reset using encrypted or traditional Django tokens
 
+### Features
+- Supports both encrypted Fernet tokens and traditional Django tokens for backward compatibility
+- Enhanced password strength validation using Django's built-in validators
+- Password confirmation field matching verification
+- Comprehensive error messaging for security and user experience
+- Token expiration and one-time use validation
+
+### URL Patterns
+- **Primary**: `/api/users/password-reset/confirm/` (supports query parameters)
+- **Legacy**: `/api/users/password-reset/confirm/<uidb64>/<token>/` (backward compatibility)
+- **Query Parameters**: `?uid=<uid>&token=<token>`
+
+### Request Format
+
+#### Required Parameters
 ```json
 {
   "uid": "base64-encoded-user-id",
   "token": "encrypted-or-django-token",
-  "new_password": "newpassword123",
-  "re_new_password": "newpassword123"
+  "new_password1": "newpassword123",
+  "new_password2": "newpassword123"
 }
 ```
 
-- You may also pass uid and token via query string: `/api/users/password_reset/confirm/?uid=<uid>&token=<token>`
+#### Parameter Details
+- `uid`: Base64 encoded user ID (can be passed in URL, query params, or request body)
+- `token`: Encrypted Fernet token or traditional Django token
+- `new_password1`: New password (must meet strength requirements)
+- `new_password2`: Password confirmation (must match new_password1)
+
+### Response Formats
+
+#### Success Response (200 OK)
+```json
+{
+  "message": "Password has been reset successfully"
+}
+```
+
+#### Missing Parameters (400 Bad Request)
+```json
+{
+  "error": "Missing reset parameters"
+}
+```
+
+#### Invalid User ID (400 Bad Request)
+```json
+{
+  "error": "Invalid user ID"
+}
+```
+
+#### Inactive User Account (400 Bad Request)
+```json
+{
+  "error": "User account is inactive"
+}
+```
+
+#### Email Not Verified (400 Bad Request)
+```json
+{
+  "error": "Please verify your email before resetting your password. Check your inbox for the verification link or contact support if you need assistance."
+}
+```
+
+#### Missing Password Fields (400 Bad Request)
+```json
+{
+  "error": "Both password fields are required"
+}
+```
+
+#### Password Mismatch (400 Bad Request)
+```json
+{
+  "error": "Password confirmation does not match"
+}
+```
+
+#### Password Validation Failed (400 Bad Request)
+```json
+{
+  "error": "Password validation failed",
+  "details": [
+    "This password is too short. It must contain at least 8 characters.",
+    "This password is too common."
+  ]
+}
+```
+
+#### Invalid or Expired Token (400 Bad Request)
+```json
+{
+  "error": "Invalid or expired reset token"
+}
+```
+
+#### Form Validation Error (400 Bad Request)
+```json
+{
+  "error": "Password reset failed",
+  "details": {
+    "new_password1": ["This field is required."]
+  }
+}
+```
+
+### Security Features
+
+#### Token Security
+- Encrypted Fernet tokens with 24-hour expiration
+- Traditional Django tokens for backward compatibility
+- Tokens are single-use and expire after successful reset
+- URL-safe base64 encoding for secure transmission
+
+#### Password Validation
+- Django's built-in password validators
+- Minimum length requirements
+- Common password detection
+- Password similarity to user information validation
+- Numeric-only password prevention
+
+#### Rate Limiting
+- IP-based rate limiting (2 requests per minute)
+- Protection against brute force attacks
+- Automatic cleanup of rate limit records
+
+#### Input Validation
+- Required field validation
+- Password confirmation matching
+- User account status verification
+- Email verification requirement enforcement
+
+### Frontend Integration
+
+#### Standard URL Format
+```
+http://localhost:3000/verify-email?uid=<uid>&token=<token>
+```
+
+#### Production URL Format
+```
+http://frontend-url/verify-email?uid=<uid>&token=<token>
+```
+
+### Example Usage
+
+#### cURL Example
+```bash
+curl -X POST \
+  http://localhost:8000/api/users/password-reset/confirm/ \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "uid": "MQ",
+    "token": "encrypted_token_here",
+    "new_password1": "SecurePassword123!",
+    "new_password2": "SecurePassword123!"
+  }'
+```
+
+#### JavaScript Example
+```javascript
+const resetPassword = async (uid, token, password1, password2) => {
+  try {
+    const response = await fetch('/api/users/password-reset/confirm/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        uid: uid,
+        token: token,
+        new_password1: password1,
+        new_password2: password2
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      console.log('Password reset successful:', data.message);
+    } else {
+      console.error('Password reset failed:', data.error);
+    }
+  } catch (error) {
+    console.error('Network error:', error);
+  }
+};
+```
 
 ### Success Response  (Code: 200 OK)
 

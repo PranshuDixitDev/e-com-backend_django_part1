@@ -157,20 +157,27 @@ class UserLoginAPIView(views.APIView):
         # Check email verification status
         is_email_verified = getattr(user, 'is_email_verified', False)
         if not is_email_verified:
+            # Generate JWT tokens for unverified users to enable resend-verification-email endpoint
+            refresh = RefreshToken.for_user(user)
+            
             # Check if email delivery failed during registration
             if getattr(user, 'email_failed', False):
                 return Response({
                     "error": f"Please verify your email at {user.email} before logging in.",
                     "isUserEmailVerified": False,
                     "stored_email_address": user.email,
-                    "action_required": "resend_verification_email"
+                    "action_required": "resend_verification_email",
+                    "verification_token": str(refresh.access_token),
+                    "refresh_token": str(refresh)
                 }, status=status.HTTP_403_FORBIDDEN)
             else:
                 return Response({
                     "error": f"Please verify your email at {user.email} before logging in.",
                     "isUserEmailVerified": False,
                     "stored_email_address": user.email,
-                    "action_required": "check_email_for_verification"
+                    "action_required": "check_email_for_verification",
+                    "verification_token": str(refresh.access_token),
+                    "refresh_token": str(refresh)
                 }, status=status.HTTP_403_FORBIDDEN)
         
         # Update last_login on successful login
@@ -285,32 +292,8 @@ class UserProfileAPIView(views.APIView):
 
 
 
-class CustomPasswordResetConfirmView(APIView):
-    permission_classes = [AllowAny]
-
-    @method_decorator(production_ratelimit(key='ip', rate='2/m', method='POST'))
-    def post(self, request, uidb64, token):
-        try:
-            uid = urlsafe_base64_decode(uidb64).decode()
-            user = get_user_model().objects.get(pk=uid)
-        except (TypeError, ValueError, OverflowError, get_user_model().DoesNotExist) as e:
-            return Response({"error": "Invalid link: " + str(e)}, status=400)
-        
-        # Check if user is active and email is verified
-        if not user.is_active:
-            return Response({"error": "User account is inactive"}, status=400)
-        
-        if not user.is_email_verified:
-            return Response({"error": "Email must be verified before password reset"}, status=400)
-
-        if user is not None and custom_token_generator.check_token(user, token):
-            form = SetPasswordForm(user, request.data)
-            if form.is_valid():
-                form.save()
-                return Response({"message": "Password has been reset successfully"}, status=200)
-            return Response({"errors": form.errors}, status=400)
-
-        return Response({"error": "Invalid token or user"}, status=400)
+# CustomPasswordResetConfirmView removed - replaced by PasswordResetConfirmEncrypted
+# which provides enhanced security with encrypted token support
     
 
 class AddressListCreateAPIView(generics.ListCreateAPIView):
@@ -352,10 +335,23 @@ class ResendVerificationEmailAPIView(APIView):
     
     @method_decorator(production_ratelimit(key='ip', rate='2/m', method='POST'))
     def post(self, request):
-        """Resend verification email to authenticated user with enhanced security."""
-        # Get authenticated user - no email parameter needed
+        """Resend verification email to authenticated user with enhanced security.
+        
+        This endpoint now uses token-based authentication to automatically retrieve
+        the user's email address, eliminating the need for email parameter in request body.
+        Compatible with verification tokens provided by login API for unverified users.
+        """
+        # Get authenticated user from token - no email parameter needed
         user = request.user
         email = user.email
+        
+        # Additional authorization check - ensure user can only resend for their own account
+        if not user.is_authenticated:
+            return Response({
+                'error': 'Authentication required',
+                'details': 'Valid authentication token required to resend verification email',
+                'action_required': 'login_first'
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Identity verification - ensure user is requesting verification for their own email
         if not email:

@@ -18,6 +18,7 @@ import requests
 from django.conf import settings
 import logging
 from .utils import decode_user_uid
+from .token_validator import TokenValidator
 
 
 logger = logging.getLogger(__name__)
@@ -60,12 +61,8 @@ class VerifyEmailEncrypted(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Try encrypted token first
-        if self._verify_encrypted_token(token_param, user):
-            return self._activate_user(user)
-        
-        # Fallback to Django token for backward compatibility
-        if email_verification_token.check_token(user, token_param):
+        # Validate token using unified validator
+        if TokenValidator.validate_token(token_param, user, 'email_verification'):
             return self._activate_user(user)
         
         return Response(
@@ -73,20 +70,7 @@ class VerifyEmailEncrypted(APIView):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    def _verify_encrypted_token(self, token, user):
-        """Verify encrypted token."""
-        try:
-            payload = decrypt_email_token(token)
-            if not payload:
-                return False
-                
-            # Verify token is for this user and correct type
-            return (
-                payload.get('user_id') == user.pk and 
-                payload.get('token_type') == 'email_verification'
-            )
-        except Exception:
-            return False
+
 
     def _activate_user(self, user):
         """Activate user and mark email as verified."""

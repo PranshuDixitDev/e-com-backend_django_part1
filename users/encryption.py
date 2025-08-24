@@ -32,7 +32,7 @@ def get_email_encryption_key():
     return key
 
 
-def encrypt_email_token(user_id, token_type='email_verification', expires_hours=24):
+def encrypt_email_token(user_id, token_type='email_verification', expires_hours=24, user_password_hash=None):
     """
     Encrypt email token data with expiration.
     
@@ -40,6 +40,7 @@ def encrypt_email_token(user_id, token_type='email_verification', expires_hours=
         user_id: User primary key
         token_type: Type of token ('email_verification' or 'password_reset')
         expires_hours: Token expiration in hours
+        user_password_hash: User's current password hash for token invalidation
         
     Returns:
         str: Encrypted token
@@ -54,6 +55,10 @@ def encrypt_email_token(user_id, token_type='email_verification', expires_hours=
         'expires_at': expires_at.isoformat(),
         'created_at': datetime.utcnow().isoformat()
     }
+    
+    # Add password hash for token invalidation after password reset
+    if user_password_hash and token_type == 'password_reset':
+        payload['password_hash'] = user_password_hash[:10]  # Only store first 10 chars for security
     
     # Encrypt the payload
     token_bytes = json.dumps(payload).encode()
@@ -111,7 +116,9 @@ def create_encrypted_verification_link(user, frontend_url, token_type='email_ver
     Returns:
         str: Complete verification URL
     """
-    encrypted_token = encrypt_email_token(user.pk, token_type)
+    # Include password hash for password reset tokens to prevent reuse
+    user_password_hash = user.password if token_type == 'password_reset' else None
+    encrypted_token = encrypt_email_token(user.pk, token_type, user_password_hash=user_password_hash)
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     
     if token_type == 'email_verification':

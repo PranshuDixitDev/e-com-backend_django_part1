@@ -5,7 +5,6 @@ from .api import (
     UserLoginAPIView,
     LogoutAPIView,
     UserProfileAPIView,
-    CustomPasswordResetConfirmView,
     AddressListCreateAPIView,
     AddressDetailAPIView,
     VerifyEmail,
@@ -23,10 +22,12 @@ urlpatterns = [
     path('addresses/<int:pk>/', AddressDetailAPIView.as_view(), name='address-detail'),
     path('password_reset/', include('django_rest_passwordreset.urls', namespace='password_reset')),
     path('auth/', include('django.contrib.auth.urls')),
-    path('password_reset/confirm/', PasswordResetConfirmEncrypted.as_view(), name='password_reset_confirm_encrypted'),
-    path('password_reset/confirm/<uidb64>/<token>/', CustomPasswordResetConfirmView.as_view(), name='password_reset_confirm'),
-    path('email-verify/<uidb64>/<token>/', VerifyEmail.as_view(), name='email-verify'),
-    # Encrypted verification endpoint (supports ?uid=&token=)
-    path('email-verify/', VerifyEmailEncrypted.as_view(), name='email-verify-encrypted'),
-    path('resend-verification-email/', ResendVerificationEmailAPIView.as_view(), name='resend-verification-email'),
+    # Password reset endpoints - standardized to support query parameters
+    path('password-reset/confirm/', PasswordResetConfirmEncrypted.as_view(), name='password_reset_confirm'),
+    path('password-reset/confirm/<uidb64>/<token>/', PasswordResetConfirmEncrypted.as_view(), name='password_reset_confirm_legacy'),
+    
+    # Email verification endpoints - standardized format
+     path('verify-email/', VerifyEmailEncrypted.as_view(), name='email-verify'),
+     path('verify-email/<uidb64>/<token>/', VerifyEmail.as_view(), name='email-verify-legacy'),
+     path('resend-verification-email/', ResendVerificationEmailAPIView.as_view(), name='resend-verification-email'),
 ]

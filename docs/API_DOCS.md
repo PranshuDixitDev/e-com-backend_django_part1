@@ -47,6 +47,12 @@ const handleLogin = async (credentials) => {
     localStorage.setItem('verification_token', data.verification_token);
     localStorage.setItem('refresh_token', data.refresh_token);
     localStorage.setItem('user_verified', 'false');
+    
+    // Store encrypted verification token if available (for resend functionality)
+    if (data.encrypted_verification_token) {
+      localStorage.setItem('encrypted_verification_token', data.encrypted_verification_token);
+    }
+    
     // Show verification prompt to user
   }
 };
@@ -442,15 +448,26 @@ curl -s -X POST "$BASE/api/users/logout/" \
 }
 ```
 
-### Success Response for Unverified Users (Code: 200 OK)
+### Success Response for Unverified Users (Code: 403 Forbidden)
 
 ```json
 {
-  "verification_token": "[verification token for unverified users]",
+  "error": "Please verify your email at user@example.com before logging in.",
+  "isUserEmailVerified": false,
+  "stored_email_address": "user@example.com",
+  "verification_token": "[JWT verification token for unverified users]",
   "refresh_token": "[refresh token]",
-  "message": "Please verify your email to access all features"
+  "encrypted_verification_token": "[encrypted token for email verification resend - only included when email_sent=true]",
+  "action_required": "check_email_for_verification"
 }
 ```
+
+**Note**: The `encrypted_verification_token` field is only included in the response when:
+- User account is inactive (email not verified)
+- Email verification is pending (`verified=false`)
+- Verification email was previously sent (`email_sent=true`)
+
+This encrypted token enables secure email verification resend functionality and follows the system's security protocols.
 
 ### Error Response (Code: 400 Bad Request)
 

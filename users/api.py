@@ -10,6 +10,7 @@ from users.models import Address
 from .serializers import UserSerializer, AddressSerializer
 from .utils import send_verification_email
 from .email_rate_limit import EmailResendAttempt
+from .encryption import encrypt_email_token
 from django.db import IntegrityError, transaction
 from django.utils.timezone import now
 from django.utils.decorators import method_decorator
@@ -160,25 +161,40 @@ class UserLoginAPIView(views.APIView):
             # Generate JWT tokens for unverified users to enable resend-verification-email endpoint
             refresh = RefreshToken.for_user(user)
             
+            # Prepare base response data
+            response_data = {
+                "error": f"Please verify your email at {user.email} before logging in.",
+                "isUserEmailVerified": False,
+                "stored_email_address": user.email,
+                "verification_token": str(refresh.access_token),
+                "refresh_token": str(refresh)
+            }
+            
+            # Add encrypted verification token only when:
+            # - User account is inactive (not is_email_verified)
+            # - Email verification is pending (verified=False)
+            # - Verification email was previously sent (email_sent=True)
+            email_sent = getattr(user, 'email_sent', False)
+            if email_sent:
+                try:
+                    # Generate encrypted verification token for resend functionality
+                    encrypted_token = encrypt_email_token(
+                        user_id=user.pk,
+                        token_type='email_verification',
+                        expires_hours=24
+                    )
+                    response_data["encrypted_verification_token"] = encrypted_token
+                except Exception as e:
+                    # Log error but don't fail the login - encrypted token is optional
+                    logger.error(f"Failed to generate encrypted verification token for user {user.pk}: {str(e)}")
+            
             # Check if email delivery failed during registration
             if getattr(user, 'email_failed', False):
-                return Response({
-                    "error": f"Please verify your email at {user.email} before logging in.",
-                    "isUserEmailVerified": False,
-                    "stored_email_address": user.email,
-                    "action_required": "resend_verification_email",
-                    "verification_token": str(refresh.access_token),
-                    "refresh_token": str(refresh)
-                }, status=status.HTTP_403_FORBIDDEN)
+                response_data["action_required"] = "resend_verification_email"
+                return Response(response_data, status=status.HTTP_403_FORBIDDEN)
             else:
-                return Response({
-                    "error": f"Please verify your email at {user.email} before logging in.",
-                    "isUserEmailVerified": False,
-                    "stored_email_address": user.email,
-                    "action_required": "check_email_for_verification",
-                    "verification_token": str(refresh.access_token),
-                    "refresh_token": str(refresh)
-                }, status=status.HTTP_403_FORBIDDEN)
+                response_data["action_required"] = "check_email_for_verification"
+                return Response(response_data, status=status.HTTP_403_FORBIDDEN)
         
         # Update last_login on successful login
         user.last_login = now()

@@ -68,11 +68,8 @@ class UserRegisterAPIView(views.APIView):
             if serializer.is_valid():
                 try:
                     user = serializer.save()
-                    # make inactive + (if present) unverified
+                    # Set email verification status (user remains active initially)
                     fields = []
-                    if getattr(user, "is_active", None) is not False:
-                        user.is_active = False
-                        fields.append("is_active")
                     if hasattr(user, "is_email_verified"):
                         user.is_email_verified = False
                         fields.append("is_email_verified")
@@ -83,11 +80,12 @@ class UserRegisterAPIView(views.APIView):
                     email_sent_successfully = send_verification_email(user)
                     
                     if not email_sent_successfully:
-                        # If email delivery fails, delete the user and return error
+                        # If email delivery fails, delete user and return error
+                        user_email = user.email  # Store email before deletion for logging
                         user.delete()
-                        logger.error(f"Registration failed for {user.email} due to email delivery failure")
+                        logger.error(f"Registration failed for {user_email} due to email delivery failure - user deleted")
                         return Response({
-                            "error": "Email delivery failed. Please verify your email address is correct and try again.",
+                            "error": "Unable to send verification email. Please check your email address and try again.",
                             "email_delivery_failed": True
                         }, status=status.HTTP_400_BAD_REQUEST)
                     
@@ -140,6 +138,21 @@ class UserLoginAPIView(views.APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         user = User.objects.filter(Q(username=login) | Q(phone_number=login) | Q(email=login)).first()
+        
+        # Check for users with failed email delivery during registration
+        if user and user.check_password(password):
+            email_verified = getattr(user, 'is_email_verified', False)
+            email_sent = getattr(user, 'email_sent', False)
+            email_failed = getattr(user, 'email_failed', False)
+            
+            # Handle case: email_verified=False, email_sent=False, email_failed=True
+            if not email_verified and not email_sent and email_failed:
+                # User registration failed due to email delivery issues
+                return Response({
+                    "error": "No users found with current account",
+                    "isUserEmailVerified": False
+                }, status=status.HTTP_401_UNAUTHORIZED)
+        
         if not user or not user.check_password(password):
             # Log failed attempt with IP and timestamp
             logging.warning(f"Failed login attempt for user {login} from IP {request.META.get('REMOTE_ADDR', 'unknown')} at {now()}")
@@ -148,16 +161,21 @@ class UserLoginAPIView(views.APIView):
                 "isUserEmailVerified": False
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        # Check if user account is active
-        if not user.is_active:
+        # Check email verification status first
+        is_email_verified = getattr(user, 'is_email_verified', False)
+        
+        # Check if user account is active (only for users with verified emails)
+        if not user.is_active and is_email_verified:
             return Response({
                 "error": "User account is inactive. Please contact support.",
                 "isUserEmailVerified": getattr(user, 'is_email_verified', False)
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # Check email verification status
-        is_email_verified = getattr(user, 'is_email_verified', False)
+        # Handle users with unverified emails (both active and inactive)
         if not is_email_verified:
+            email_sent = getattr(user, 'email_sent', False)
+            email_failed = getattr(user, 'email_failed', False)
+            
             # Generate JWT tokens for unverified users to enable resend-verification-email endpoint
             refresh = RefreshToken.for_user(user)
             
@@ -170,12 +188,8 @@ class UserLoginAPIView(views.APIView):
                 "refresh_token": str(refresh)
             }
             
-            # Add encrypted verification token only when:
-            # - User account is inactive (not is_email_verified)
-            # - Email verification is pending (verified=False)
-            # - Verification email was previously sent (email_sent=True)
-            email_sent = getattr(user, 'email_sent', False)
-            if email_sent:
+            # Add encrypted verification token for users with email_sent=True
+            if email_sent and not email_failed:
                 try:
                     # Generate encrypted verification token for resend functionality
                     encrypted_token = encrypt_email_token(
@@ -188,13 +202,13 @@ class UserLoginAPIView(views.APIView):
                     # Log error but don't fail the login - encrypted token is optional
                     logger.error(f"Failed to generate encrypted verification token for user {user.pk}: {str(e)}")
             
-            # Check if email delivery failed during registration
-            if getattr(user, 'email_failed', False):
+            # Set action required based on email status
+            if email_failed:
                 response_data["action_required"] = "resend_verification_email"
-                return Response(response_data, status=status.HTTP_403_FORBIDDEN)
             else:
                 response_data["action_required"] = "check_email_for_verification"
-                return Response(response_data, status=status.HTTP_403_FORBIDDEN)
+            
+            return Response(response_data, status=status.HTTP_403_FORBIDDEN)
         
         # Update last_login on successful login
         user.last_login = now()

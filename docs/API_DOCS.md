@@ -424,6 +424,16 @@ curl -s -X POST "$BASE/api/users/logout/" \
 
 `````
 
+### Error Response - Email Delivery Failed (Code: 400 Bad Request):
+
+```json
+{
+  "error": "Unable to send verification email. Please check your email address and try again."
+}
+`````
+
+**Note**: If email delivery fails during registration, the user account will not be created. Users must provide a valid email address that can receive emails for successful registration.
+
 ### Login
 
 * **URL**: `/api/users/login/`
@@ -457,17 +467,34 @@ curl -s -X POST "$BASE/api/users/logout/" \
   "stored_email_address": "user@example.com",
   "verification_token": "[JWT verification token for unverified users]",
   "refresh_token": "[refresh token]",
-  "encrypted_verification_token": "[encrypted token for email verification resend - only included when email_sent=true]",
-  "action_required": "check_email_for_verification"
+  "encrypted_verification_token": "[encrypted token for email verification resend - only included when email_sent=true and email_failed=false]",
+  "action_required": "resend_verification_email"
 }
 ```
 
 **Note**: The `encrypted_verification_token` field is only included in the response when:
-- User account is inactive (email not verified)
-- Email verification is pending (`verified=false`)
-- Verification email was previously sent (`email_sent=true`)
+- Email verification is pending (`email_verified=false`)
+- Verification email was successfully sent (`email_sent=true`)
+- Email delivery did not fail (`email_failed=false`)
+- User remains active (`is_active=true`) after successful email delivery
 
 This encrypted token enables secure email verification resend functionality and follows the system's security protocols.
+
+### Error Response for Failed Email Registration (Code: 400 Bad Request)
+
+```json
+{
+  "error": "No users found"
+}
+```
+
+**Note**: This response is returned when attempting to login with credentials where:
+- Email verification failed during registration (`email_verified=false`)
+- Email was not sent (`email_sent=false`) 
+- Email delivery failed (`email_failed=true`)
+- User account was set to inactive (`is_active=false`)
+
+Users with failed email delivery during registration cannot login and must re-register with a valid email address.
 
 ### Error Response (Code: 400 Bad Request)
 
@@ -476,6 +503,19 @@ This encrypted token enables secure email verification resend functionality and 
   "error": "Invalid credentials"
 }
 ```
+
+### User Active Status and Email Verification Logic
+
+**Registration Behavior:**
+- Users are initially created as active (`is_active=true`) when registration data is valid
+- If email delivery succeeds (`email_sent=true`, `email_failed=false`), user remains active
+- If email delivery fails (`email_sent=false`, `email_failed=true`), user is set to inactive (`is_active=false`)
+- Users with failed email delivery cannot complete registration and must retry with a valid email
+
+**Login Behavior:**
+- Active users with unverified emails (`email_verified=false`, `email_sent=true`, `email_failed=false`) can login and receive tokens for email resend
+- Users with failed email delivery during registration (`email_verified=false`, `email_sent=false`, `email_failed=true`) receive "No users found" error
+- Verified users (`email_verified=true`) login normally with access and refresh tokens
 
 ### Email Verification
 

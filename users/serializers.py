@@ -49,6 +49,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         addresses_data = validated_data.pop('addresses', [])
+        # Set user as inactive by default - will be activated only when email is successfully sent
+        validated_data['is_active'] = False
         user = User.objects.create_user(**validated_data)
         for address_data in addresses_data:
             Address.objects.create(user=user, **address_data)

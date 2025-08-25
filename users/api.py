@@ -68,7 +68,7 @@ class UserRegisterAPIView(views.APIView):
             if serializer.is_valid():
                 try:
                     user = serializer.save()
-                    # Set email verification status (user remains active initially)
+                    # Set email verification status (user is inactive by default)
                     fields = []
                     if hasattr(user, "is_email_verified"):
                         user.is_email_verified = False
@@ -88,6 +88,10 @@ class UserRegisterAPIView(views.APIView):
                             "error": "Unable to send verification email. Please check your email address and try again.",
                             "email_delivery_failed": True
                         }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    # Only activate user when email is successfully sent
+                    user.is_active = True
+                    user.save(update_fields=['is_active'])
                     
                     # Return success response with user data
                     response_data = serializer.data.copy()

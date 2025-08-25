@@ -97,6 +97,228 @@ const resendVerificationEmail = async () => {
 };
 ```
 
+ go### Password Reset Flow
+
+#### Postman/API Testing Guide
+
+**Step 1: Request Password Reset**
+
+```bash
+# Postman Configuration:
+# Method: POST
+# URL: http://127.0.0.1:8000/api/users/password-reset/
+# Headers:
+#   Content-Type: application/json
+#   X-CSRFToken: dummy-csrf-token
+# Body (raw JSON):
+{
+  "email": "user@example.com"
+}
+```
+
+**Expected Success Response (200 OK):**
+```json
+{
+  "message": "Password reset email sent",
+  "details": "Check your email for password reset instructions",
+  "action_required": "check_email"
+}
+```
+
+**Step 2: Confirm Password Reset**
+
+```bash
+# Postman Configuration:
+# Method: POST
+# URL: http://127.0.0.1:8000/api/users/password-reset/confirm/
+# Headers:
+#   Content-Type: application/json
+#   X-CSRFToken: dummy-csrf-token
+# Body (raw JSON):
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "new_password": "NewSecurePassword123!",
+  "re_enter_password": "NewSecurePassword123!"
+}
+```
+
+**Expected Success Response (200 OK):**
+```json
+{
+  "message": "Password has been reset successfully",
+  "details": "Your password has been updated. You can now log in with your new password.",
+  "action_required": "login_with_new_password",
+  "next_step": "redirect_to_login"
+}
+```
+
+#### Frontend Implementation Guide
+
+```javascript
+// Step 1: Request password reset
+const requestPasswordReset = async (email) => {
+  const response = await fetch('/api/users/password-reset/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCsrfToken() // Required for security
+    },
+    body: JSON.stringify({ email })
+  });
+  
+  const data = await response.json();
+  
+  if (response.ok) {
+    // Show success message to user
+    console.log('Password reset email sent');
+    return data;
+  } else {
+    // Handle errors (user not found, rate limiting, etc.)
+    throw new Error(data.error || 'Password reset failed');
+  }
+};
+
+// Step 2: Reset password with token (from email link)
+const resetPassword = async (token, newPassword, confirmPassword) => {
+  const response = await fetch('/api/users/password-reset/confirm/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCsrfToken() // Required for security
+    },
+    body: JSON.stringify({
+      token: token,
+      new_password: newPassword,
+      re_enter_password: confirmPassword
+    })
+  });
+  
+  const data = await response.json();
+  
+  if (response.ok) {
+    // Password reset successful - redirect to login
+    console.log('Password reset successful');
+    return data;
+  } else {
+    // Handle errors (invalid token, weak password, etc.)
+    throw new Error(data.error || 'Password reset failed');
+  }
+};
+
+// Helper function to get CSRF token
+const getCsrfToken = () => {
+  // For development/testing, you can use a dummy token
+  // In production, implement proper CSRF token handling
+  return 'dummy-csrf-token';
+};
+```
+
+#### Complete Password Reset Component Example
+
+```javascript
+// Password Reset Request Component
+const PasswordResetRequest = () => {
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setMessage('');
+    
+    try {
+      await requestPasswordReset(email);
+      setMessage('Password reset email sent. Please check your inbox.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Enter your email"
+        required
+      />
+      <button type="submit" disabled={loading}>
+        {loading ? 'Sending...' : 'Reset Password'}
+      </button>
+      {message && <p className="success">{message}</p>}
+      {error && <p className="error">{error}</p>}
+    </form>
+  );
+};
+
+// Password Reset Confirmation Component
+const PasswordResetConfirm = ({ token }) => {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    setMessage('');
+    
+    try {
+      await resetPassword(token, newPassword, confirmPassword);
+      setMessage('Password reset successful. You can now log in with your new password.');
+      // Redirect to login page after 2 seconds
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="password"
+        value={newPassword}
+        onChange={(e) => setNewPassword(e.target.value)}
+        placeholder="New Password"
+        required
+        minLength="8"
+      />
+      <input
+        type="password"
+        value={confirmPassword}
+        onChange={(e) => setConfirmPassword(e.target.value)}
+        placeholder="Confirm New Password"
+        required
+        minLength="8"
+      />
+      <button type="submit" disabled={loading}>
+        {loading ? 'Resetting...' : 'Reset Password'}
+      </button>
+      {message && <p className="success">{message}</p>}
+      {error && <p className="error">{error}</p>}
+    </form>
+  );
+};
+```
+
 
 ### Obtaining Tokens
 - **URL**: `/api/token/`
@@ -2789,6 +3011,217 @@ The `APIEventAdmin` has been enhanced with:
 - **Permissions**: No add/delete permissions - events logged automatically via middleware
 
 ## Endpoints
+
+### Password Reset Request
+
+- **URL**: `/api/users/password-reset/`
+- **Method**: `POST`
+- **Auth Required**: No
+- **Rate Limiting**: 2 requests per minute per IP
+- **Description**: Request a password reset email for a user account
+- **Security**: Requires CSRF token in headers
+
+#### Request Headers
+```json
+{
+  "Content-Type": "application/json",
+  "X-CSRFToken": "csrf-token-value"
+}
+```
+
+#### Request Body
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+#### Success Response (200 OK)
+```json
+{
+  "message": "Password reset email sent",
+  "details": "Check your email for password reset instructions",
+  "action_required": "check_email"
+}
+```
+
+#### Error Responses
+
+**User Not Found (404 Not Found)**
+```json
+{
+  "error": "User not found",
+  "details": "No user found with the provided email address"
+}
+```
+
+**Rate Limited (429 Too Many Requests)**
+```json
+{
+  "error": "Rate limit exceeded",
+  "details": "Too many password reset attempts. Please try again later."
+}
+```
+
+**Missing CSRF Token (403 Forbidden)**
+```json
+{
+  "error": "You do not have permission to perform this action"
+}
+```
+
+**User Not Eligible (403 Forbidden)**
+```json
+{
+  "error": "Password reset not allowed",
+  "details": "User account is not eligible for password reset",
+  "reasons": ["Account not active", "Email not verified", "Too many recent attempts"]
+}
+```
+
+### Password Reset Confirmation
+
+- **URL**: `/api/users/password-reset/confirm/`
+- **Method**: `POST`
+- **Auth Required**: No
+- **Rate Limiting**: 2 requests per minute per IP
+- **Description**: Confirm password reset using JWT token and set new password
+- **Security**: Requires CSRF token in headers
+
+#### Request Headers
+```json
+{
+  "Content-Type": "application/json",
+  "X-CSRFToken": "csrf-token-value"
+}
+```
+
+#### Request Body
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "new_password": "NewSecurePassword123!",
+  "re_enter_password": "NewSecurePassword123!"
+}
+```
+
+#### Success Response (200 OK)
+```json
+{
+  "message": "Password has been reset successfully",
+  "details": "Your password has been updated. You can now log in with your new password.",
+  "action_required": "login_with_new_password",
+  "next_step": "redirect_to_login"
+}
+```
+
+#### Error Responses
+
+**Missing Fields (400 Bad Request)**
+```json
+{
+  "error": "Both password fields are required",
+  "details": "Please provide both new_password and re_enter_password fields",
+  "required_fields": ["new_password", "re_enter_password"],
+  "action_required": "provide_passwords"
+}
+```
+
+**Password Mismatch (400 Bad Request)**
+```json
+{
+  "error": "Password confirmation does not match",
+  "details": "The new password and re-entered password must be identical",
+  "action_required": "match_passwords"
+}
+```
+
+**Weak Password (400 Bad Request)**
+```json
+{
+  "error": "Password validation failed",
+  "details": "The password does not meet security requirements",
+  "validation_errors": [
+    "This password is too short. It must contain at least 8 characters.",
+    "This password is too common."
+  ],
+  "action_required": "strengthen_password",
+  "password_requirements": [
+    "At least 8 characters long",
+    "Cannot be too similar to your personal information",
+    "Cannot be a commonly used password",
+    "Cannot be entirely numeric"
+  ]
+}
+```
+
+**Invalid Token (400 Bad Request)**
+```json
+{
+  "error": "Invalid or expired reset token",
+  "details": "The password reset token is invalid, expired, or has already been used",
+  "action_required": "request_new_reset"
+}
+```
+
+**User Not Eligible (403 Forbidden)**
+```json
+{
+  "error": "Password reset not allowed",
+  "details": "User account is not eligible for password reset",
+  "reasons": ["Account not active", "Email not verified"]
+}
+```
+
+**Rate Limited (429 Too Many Requests)**
+```json
+{
+  "error": "Rate limit exceeded",
+  "details": "Too many password reset attempts. Please try again later."
+}
+```
+
+#### cURL Examples
+
+**Request Password Reset**
+```bash
+curl -X POST "http://127.0.0.1:8000/api/users/password-reset/" \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: dummy-csrf-token" \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+
+**Confirm Password Reset**
+```bash
+curl -X POST "http://127.0.0.1:8000/api/users/password-reset/confirm/" \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: dummy-csrf-token" \
+  -d '{
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "new_password": "NewSecurePassword123!",
+    "re_enter_password": "NewSecurePassword123!"
+  }'
+```
+
+#### Security Features
+
+- **JWT Token Security**: Uses cryptographically signed JWT tokens with expiration
+- **Rate Limiting**: Prevents brute force attacks with IP-based rate limiting
+- **CSRF Protection**: Requires CSRF token to prevent cross-site request forgery
+- **User Eligibility Validation**: Ensures only active, verified users can reset passwords
+- **Password Strength Validation**: Enforces Django's built-in password validators
+- **Attempt Tracking**: Monitors and limits password reset attempts per user
+- **Secure Logging**: Logs all password reset activities for security monitoring
+
+#### Integration Notes
+
+- **Email Integration**: Password reset emails contain JWT tokens for secure verification
+- **Frontend Integration**: Use the provided JavaScript examples for seamless integration
+- **Admin Monitoring**: All password reset activities are tracked in the admin panel
+- **Token Expiration**: JWT tokens expire after a configurable time period
+- **One-Time Use**: Each reset token can only be used once for security
 
 ### API Events Analytics
 - **URL**: `/api/analytics/api-events/`

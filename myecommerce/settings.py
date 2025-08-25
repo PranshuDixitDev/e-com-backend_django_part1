@@ -121,7 +121,7 @@ INSTALLED_APPS = [
     'core',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
-    'django_rest_passwordreset',
+    # 'django_rest_passwordreset',  # Removed - using custom implementation
     'django.contrib.sites',
     'social_django',
     'corsheaders',

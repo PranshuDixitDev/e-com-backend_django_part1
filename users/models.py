@@ -12,6 +12,12 @@ class CustomUser(AbstractUser):
     email_sent = models.BooleanField(default=False, help_text='Indicates if verification email was successfully sent')
     email_failed = models.BooleanField(default=False, help_text='Indicates if verification email failed to send')
     
+    # Password reset email tracking fields
+    password_reset_email_sent = models.BooleanField(default=False, help_text='Indicates if password reset email was successfully sent')
+    password_reset_email_failed = models.BooleanField(default=False, help_text='Indicates if password reset email failed to send')
+    password_reset_email_sent_at = models.DateTimeField(null=True, blank=True, help_text='Timestamp when password reset email was last sent')
+    password_reset_attempts = models.PositiveIntegerField(default=0, help_text='Number of password reset attempts made')
+    
     class Meta:
         verbose_name = 'user'
         verbose_name_plural = 'users'

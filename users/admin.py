@@ -19,13 +19,15 @@ class CustomUserAdmin(UserAdmin):
     list_display = (
         'username', 'email', 'first_name', 'last_name', 'phone_number',
         'is_active', 'email_verification_status', 'email_sent_status', 
-        'email_failed_status', 'date_joined', 'last_login'
+        'email_failed_status', 'password_reset_status', 'password_reset_attempts_count',
+        'date_joined', 'last_login'
     )
     
     # Add filters for email verification status
     list_filter = (
         'is_active', 'is_staff', 'is_superuser', 'is_email_verified',
-        'email_sent', 'email_failed', 'date_joined', 'last_login'
+        'email_sent', 'email_failed', 'password_reset_email_sent', 
+        'password_reset_email_failed', 'date_joined', 'last_login'
     )
     
     # Add search fields
@@ -37,13 +39,21 @@ class CustomUserAdmin(UserAdmin):
             'fields': ('is_email_verified', 'email_sent', 'email_failed'),
             'description': 'Email verification status and tracking'
         }),
+        ('Password Reset Tracking', {
+            'fields': ('password_reset_email_sent', 'password_reset_email_failed', 
+                      'password_reset_email_sent_at', 'password_reset_attempts'),
+            'description': 'Password reset email status and tracking'
+        }),
         ('Additional Info', {
             'fields': ('phone_number', 'birthdate'),
         }),
     )
     
     # Make email verification fields readonly in admin
-    readonly_fields = ('is_email_verified', 'email_sent', 'email_failed', 'date_joined', 'last_login')
+    readonly_fields = ('is_email_verified', 'email_sent', 'email_failed', 
+                      'password_reset_email_sent', 'password_reset_email_failed',
+                      'password_reset_email_sent_at', 'password_reset_attempts',
+                      'date_joined', 'last_login')
     
     # Custom methods for better display
     def email_verification_status(self, obj):
@@ -84,6 +94,41 @@ class CustomUserAdmin(UserAdmin):
             )
     email_failed_status.short_description = 'Email Failed'
     email_failed_status.admin_order_field = 'email_failed'
+    
+    def password_reset_status(self, obj):
+        """Display password reset email status with colored indicators."""
+        if obj.password_reset_email_failed:
+            return format_html(
+                '<span style="color: red; font-weight: bold;">✗ Failed</span>'
+            )
+        elif obj.password_reset_email_sent:
+            return format_html(
+                '<span style="color: green;">✓ Sent</span>'
+            )
+        else:
+            return format_html(
+                '<span style="color: gray;">— Not Sent</span>'
+            )
+    password_reset_status.short_description = 'Password Reset Email'
+    password_reset_status.admin_order_field = 'password_reset_email_sent'
+    
+    def password_reset_attempts_count(self, obj):
+        """Display password reset attempts count with color coding."""
+        count = obj.password_reset_attempts
+        if count == 0:
+            return format_html(
+                '<span style="color: gray;">0</span>'
+            )
+        elif count <= 3:
+            return format_html(
+                '<span style="color: orange;">{}</span>', count
+            )
+        else:
+            return format_html(
+                '<span style="color: red; font-weight: bold;">{}</span>', count
+            )
+    password_reset_attempts_count.short_description = 'Reset Attempts'
+    password_reset_attempts_count.admin_order_field = 'password_reset_attempts'
     
     # Custom actions
     actions = ['resend_verification_email']

@@ -21,8 +21,10 @@ class PriceWeightInlineFormSet(BaseInlineFormSet):
     def clean(self):
         super().clean()
         count = sum(1 for form in self.forms if form.cleaned_data and not form.cleaned_data.get('DELETE', False))
-        if count < 3:
-            raise ValidationError('At least 3 price-weight combinations are required.')
+        
+        # Allow 1 combination (for default values) or 3-5 combinations (for manual entries)
+        if count > 0 and count < 3 and count != 1:
+            raise ValidationError('Either provide 1 combination (for default values) or at least 3 price-weight combinations.')
         if count > 5:
             raise ValidationError('No more than 5 price-weight combinations are allowed.')
         

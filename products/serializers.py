@@ -61,7 +61,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
     tags = TagListSerializerField()
-    price_weights = PriceWeightComboSerializer(many=True)
+    price_weights = PriceWeightComboSerializer(many=True, required=False)
     category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
     category_name = serializers.CharField(source='category.name', read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
@@ -81,14 +81,21 @@ class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
         return "In stock" if in_stock and obj.is_active else "Out of stock"
 
     def create(self, validated_data):
-            price_weights_data = validated_data.pop('price_weights')
+            price_weights_data = validated_data.pop('price_weights', [])
             category = validated_data.pop('category')
 
             product = Product.objects.create(category=category, **validated_data)
             print(f"Created product: {product}")  # Debug log
+            
             # Create price-weight combinations
-            for combo_data in price_weights_data:
-                PriceWeight.objects.create(product=product, **combo_data)
+            if price_weights_data:
+                # Use provided price-weight data
+                for combo_data in price_weights_data:
+                    PriceWeight.objects.create(product=product, **combo_data)
+            else:
+                # Create default price-weight combination when none provided
+                PriceWeight.objects.create(product=product)
+            
             product.update_availability()
             return product
 

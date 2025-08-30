@@ -29,7 +29,7 @@ urlpatterns = [
     path('password-reset/confirm/<uidb64>/<token>/', PasswordResetConfirmEncrypted.as_view(), name='password_reset_confirm_legacy'),
     
     # Email verification endpoints - standardized format
-     path('verify-email/', VerifyEmailEncrypted.as_view(), name='email-verify'),
+     path('email-verify/', VerifyEmailEncrypted.as_view(), name='email-verify'),
      path('verify-email/<uidb64>/<token>/', VerifyEmail.as_view(), name='email-verify-legacy'),
      path('resend-verification-email/', ResendVerificationEmailAPIView.as_view(), name='resend-verification-email'),
 ]

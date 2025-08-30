@@ -267,7 +267,7 @@ MIDDLEWARE = [
 ]
 
 CSP_DEFAULT_SRC = ("'self'",)
-CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'http://localhost:8000' if DEBUG else 'https://apis.example.com', 'https://ajax.googleapis.com', "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com")
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", 'http://localhost:8000' if DEBUG else 'https://api.gujjumasala.in', 'https://ajax.googleapis.com', "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com")
 CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", 'https://fonts.googleapis.com')
 CSP_IMG_SRC = ("'self'", 'data:', 'https://api.gujjumasala.in', 'https://www.gujjumasala.in', "https:")
 CSP_FONT_SRC = ("'self'", 'https://fonts.gstatic.com')

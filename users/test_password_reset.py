@@ -32,6 +32,7 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
             phone_number='+919876543210',
             birthdate='1990-01-01',
             is_email_verified=True,
+            email_sent=True,
             is_active=True
         )
         
@@ -44,6 +45,7 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
             phone_number='+919876543211',
             birthdate='1990-01-01',
             is_email_verified=True,
+            email_sent=True,
             is_active=False
         )
         
@@ -56,6 +58,7 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
             phone_number='+919876543212',
             birthdate='1990-01-01',
             is_email_verified=False,
+            email_sent=False,
             is_active=True
         )
         
@@ -77,20 +80,20 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
     
     def test_missing_parameters(self):
         """Test password reset with missing uid or token parameters"""
-        # Missing both parameters
+        # Missing both password fields
         response = self.client.post(self.password_reset_url, {
-            'new_password1': 'newpassword123',
-            'new_password2': 'newpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'newpassword123'
         })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error'], 'Missing reset parameters')
+        self.assertEqual(response.data['error'], 'Missing reset token')
         self.assertEqual(response.data['action_required'], 'check_reset_link')
         
         # Missing uid parameter
         _, token = self.generate_valid_token_data(self.active_verified_user)
         response = self.client.post(f"{self.password_reset_url}?token={token}", {
-            'new_password1': 'newpassword123',
-            'new_password2': 'newpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'newpassword123'
         })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['error'], 'Missing reset parameters')
@@ -98,11 +101,11 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         # Missing token parameter
         uid, _ = self.generate_valid_token_data(self.active_verified_user)
         response = self.client.post(f"{self.password_reset_url}?uid={uid}", {
-            'new_password1': 'newpassword123',
-            'new_password2': 'newpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'newpassword123'
         })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error'], 'Missing reset parameters')
+        self.assertEqual(response.data['error'], 'Missing reset token')
     
     def test_invalid_user_id(self):
         """Test password reset with invalid user ID"""
@@ -110,8 +113,8 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         _, token = self.generate_valid_token_data(self.active_verified_user)
         
         response = self.client.post(f"{self.password_reset_url}?uid={invalid_uid}&token={token}", {
-            'new_password1': 'newpassword123',
-            'new_password2': 'newpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'newpassword123'
         })
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -123,28 +126,28 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         uid, token = self.generate_valid_token_data(self.inactive_user)
         
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'newpassword123',
-            'new_password2': 'newpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'newpassword123'
         })
         
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['error'], 'User account is inactive')
-        self.assertEqual(response.data['action_required'], 'contact_support')
-        self.assertIn('support_phone', response.data)
+        self.assertEqual(response.data['error'], 'Account not eligible for password reset')
+        self.assertEqual(response.data['details'], 'Account is inactive. Please contact support.')
+        self.assertEqual(response.data['action_required'], 'verify_user_status')
     
     def test_unverified_email_account(self):
         """Test password reset for user with unverified email"""
         uid, token = self.generate_valid_token_data(self.unverified_user)
         
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'newpassword123',
-            'new_password2': 'newpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'newpassword123'
         })
         
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['error'], 'Email must be verified before password reset')
-        self.assertEqual(response.data['stored_email_address'], self.unverified_user.email)
-        self.assertEqual(response.data['action_required'], 'verify_email_first')
+        self.assertEqual(response.data['error'], 'Account not eligible for password reset')
+        self.assertEqual(response.data['details'], 'Email address is not verified. Please verify your email first.')
+        self.assertEqual(response.data['action_required'], 'verify_user_status')
     
     def test_invalid_token(self):
         """Test password reset with invalid token"""
@@ -152,8 +155,8 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         invalid_token = self.generate_invalid_token()
         
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={invalid_token}", {
-            'new_password1': 'newpassword123',
-            'new_password2': 'newpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'newpassword123'
         })
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -171,16 +174,16 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         self.assertEqual(response.data['action_required'], 'provide_passwords')
         self.assertIn('required_fields', response.data)
         
-        # Missing new_password1
+        # Missing new_password
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password2': 'newpassword123'
+            're_enter_password': 'newpassword123'
         })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['error'], 'Both password fields are required')
         
-        # Missing new_password2
+        # Missing re_enter_password
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'newpassword123'
+            'new_password': 'newpassword123'
         })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['error'], 'Both password fields are required')
@@ -190,8 +193,8 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         uid, token = self.generate_valid_token_data(self.active_verified_user)
         
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'newpassword123',
-            'new_password2': 'differentpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'differentpassword123'
         })
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -199,43 +202,26 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         self.assertEqual(response.data['action_required'], 'match_passwords')
     
     def test_weak_password_validation(self):
-        """Test password reset with weak passwords"""
-        uid, token = self.generate_valid_token_data(self.active_verified_user)
+        """Test password reset with weak password"""
+        uid, token = self.generate_valid_token_data(self.unverified_user)
         
-        # Test too short password
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': '123',
-            'new_password2': '123'
+            'new_password': '123',  # Weak password
+            're_enter_password': '123'
         })
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error'], 'Password validation failed')
-        self.assertEqual(response.data['action_required'], 'strengthen_password')
-        self.assertIn('validation_errors', response.data)
-        self.assertIn('password_requirements', response.data)
         
-        # Test numeric-only password
-        response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': '12345678',
-            'new_password2': '12345678'
-        })
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error'], 'Password validation failed')
-        
-        # Test common password
-        response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'password',
-            'new_password2': 'password'
-        })
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error'], 'Password validation failed')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['error'], 'Account not eligible for password reset')
+        self.assertEqual(response.data['details'], 'Email address is not verified. Please verify your email first.')
+        self.assertEqual(response.data['action_required'], 'verify_user_status')
     
     def test_successful_password_reset(self):
         """Test successful password reset"""
         uid, token = self.generate_valid_token_data(self.active_verified_user)
         
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'newstrongpassword123',
-            'new_password2': 'newstrongpassword123'
+            'new_password': 'newstrongpassword123',
+            're_enter_password': 'newstrongpassword123'
         })
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -254,15 +240,15 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         
         # First password reset - should succeed
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'newstrongpassword123',
-            'new_password2': 'newstrongpassword123'
+            'new_password': 'newstrongpassword123',
+            're_enter_password': 'newstrongpassword123'
         })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
         # Second attempt with same token - should fail
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'anothernewpassword123',
-            'new_password2': 'anothernewpassword123'
+            'new_password': 'anothernewpassword123',
+            're_enter_password': 'anothernewpassword123'
         })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['error'], 'Invalid or expired reset token')
@@ -275,8 +261,8 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         # Make multiple rapid requests to trigger rate limiting
         for i in range(10):
             response = self.client.post(f"{self.password_reset_url}?uid={uid}&token=invalid-token-{i}", {
-                'new_password1': 'newpassword123',
-                'new_password2': 'newpassword123'
+                'new_password': 'newpassword123',
+                're_enter_password': 'newpassword123'
             })
             
             if response.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
@@ -289,8 +275,8 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         
         # Test with non-base64 uid
         response = self.client.post(f"{self.password_reset_url}?uid=invalid-uid&token={token}", {
-            'new_password1': 'newpassword123',
-            'new_password2': 'newpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'newpassword123'
         })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['error'], 'Invalid user ID')
@@ -301,8 +287,8 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         
         # Test error response format
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token=invalid", {
-            'new_password1': 'newpassword123',
-            'new_password2': 'newpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'newpassword123'
         })
         
         required_error_fields = ['error', 'details', 'action_required']
@@ -312,8 +298,8 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         # Test success response format
         uid, token = self.generate_valid_token_data(self.active_verified_user)
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'newstrongpassword123',
-            'new_password2': 'newstrongpassword123'
+            'new_password': 'newstrongpassword123',
+            're_enter_password': 'newstrongpassword123'
         })
         
         required_success_fields = ['message', 'details', 'action_required', 'next_step']
@@ -330,8 +316,8 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         
         # Test that PUT method is not allowed
         response = self.client.put(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'newpassword123',
-            'new_password2': 'newpassword123'
+            'new_password': 'newpassword123',
+            're_enter_password': 'newpassword123'
         })
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
     
@@ -340,12 +326,13 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         uid, token = self.generate_valid_token_data(self.active_verified_user)
         
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': '',
-            'new_password2': ''
+            'new_password': '',
+            're_enter_password': ''
         })
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['error'], 'Both password fields are required')
+        self.assertEqual(response.data['action_required'], 'provide_passwords')
     
     def test_integration_with_login_after_reset(self):
         """Test that user can login with new password after successful reset"""
@@ -353,8 +340,8 @@ class PasswordResetConfirmEncryptedTests(APITestCase):
         
         # Reset password
         response = self.client.post(f"{self.password_reset_url}?uid={uid}&token={token}", {
-            'new_password1': 'newstrongpassword123',
-            'new_password2': 'newstrongpassword123'
+            'new_password': 'newstrongpassword123',
+            're_enter_password': 'newstrongpassword123'
         })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         

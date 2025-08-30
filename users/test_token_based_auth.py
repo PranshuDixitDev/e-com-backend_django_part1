@@ -137,22 +137,16 @@ class TokenBasedAuthenticationTests(APITestCase):
         }
         response = self.client.post(self.password_reset_url, data)
         
-        # Should return 403 with enhanced guidance
+        # Should return 403 with error details
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertIn('error', response.data)
-        self.assertIn('verification_status', response.data)
-        self.assertIn('guidance', response.data)
+        self.assertIn('details', response.data)
+        self.assertIn('action_required', response.data)
         
-        # Check verification status details
-        verification_status = response.data['verification_status']
-        self.assertIn('is_newly_registered', verification_status)
-        self.assertIn('email_failed', verification_status)
-        self.assertIn('registration_date', verification_status)
-        
-        # Check guidance is provided
-        guidance = response.data['guidance']
-        self.assertIn('message', guidance)
-        self.assertIn('recommended_action', guidance)
+        # Check error details
+        self.assertEqual(response.data['error'], 'Account not eligible for password reset')
+        self.assertEqual(response.data['details'], 'Email address is not verified. Please verify your email first.')
+        self.assertEqual(response.data['action_required'], 'verify_user_status')
     
     def test_verified_user_can_reset_password(self):
         """Test that verified users can reset password normally."""

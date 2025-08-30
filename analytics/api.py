@@ -144,12 +144,19 @@ class AnalyticsViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        search_analytics = SearchAnalytics.objects.create(
+        search_analytics, created = SearchAnalytics.objects.get_or_create(
             query=query,
-            user=request.user if request.user.is_authenticated else None,
-            results_count=results_count,
-            category_id=category_id
+            date=timezone.now().date(),
+            defaults={
+                'user': request.user if request.user.is_authenticated else None,
+                'results_count': results_count,
+                'category_id': category_id,
+                'search_count': 1
+            }
         )
+        if not created:
+            search_analytics.search_count += 1
+            search_analytics.save()
         
         serializer = SearchAnalyticsSerializer(search_analytics)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

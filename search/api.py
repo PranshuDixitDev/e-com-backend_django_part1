@@ -7,6 +7,7 @@ from categories.models import Category
 from products.serializers import ProductSerializer
 from categories.serializers import CategorySerializer
 from django.db.models import Q
+from django.utils import timezone
 from analytics.models import SearchAnalytics
 
 class UnifiedSearchAPIView(APIView):
@@ -47,11 +48,18 @@ class UnifiedSearchAPIView(APIView):
         # If there are no exact matches, return only suggestions
         if not products and not categories:
             # Log search analytics for no results
-            SearchAnalytics.objects.create(
+            search_analytics, created = SearchAnalytics.objects.get_or_create(
                 query=query,
-                user=request.user if request.user.is_authenticated else None,
-                results_count=0
+                date=timezone.now().date(),
+                defaults={
+                    'user': request.user if request.user.is_authenticated else None,
+                    'results_count': 0,
+                    'search_count': 1
+                }
             )
+            if not created:
+                search_analytics.search_count += 1
+                search_analytics.save()
             
             if product_suggestions or category_suggestions:
                 return Response({
@@ -64,11 +72,18 @@ class UnifiedSearchAPIView(APIView):
 
         # Log search analytics
         total_results = len(products) + len(categories)
-        SearchAnalytics.objects.create(
+        search_analytics, created = SearchAnalytics.objects.get_or_create(
             query=query,
-            user=request.user if request.user.is_authenticated else None,
-            results_count=total_results
+            date=timezone.now().date(),
+            defaults={
+                'user': request.user if request.user.is_authenticated else None,
+                'results_count': total_results,
+                'search_count': 1
+            }
         )
+        if not created:
+            search_analytics.search_count += 1
+            search_analytics.save()
         
         # If exact matches exist but you still want to show fuzzy suggestions
         return Response({

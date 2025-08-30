@@ -50,6 +50,11 @@ class Category(models.Model):
                                         validators=[validate_image],
                                         blank=True,
                                         null=True)
+    is_active = models.BooleanField(
+        default=True, 
+        help_text="Uncheck this box to deactivate the category.", 
+        db_index=True
+    )
 
     class Meta:
         ordering = ['display_order', 'name']

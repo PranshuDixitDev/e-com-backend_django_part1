@@ -153,6 +153,7 @@ JAZZMIN_SETTINGS = {
         "users.CustomUser": "fas fa-user",
         "users.Address": "fas fa-address-card",
         "products.Product": "fas fa-box",
+        "products.BulkUpload": "fas fa-upload",
         "orders.Order": "fas fa-shopping-cart",
         "cart.Cart": "fas fa-shopping-basket",
         "analytics.APIEvent": "fas fa-chart-line"
@@ -400,6 +401,10 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# File upload settings - Support up to 400MB uploads
+DATA_UPLOAD_MAX_MEMORY_SIZE = 419430400  # 400MB in bytes
+FILE_UPLOAD_MAX_MEMORY_SIZE = 419430400  # 400MB in bytes
 
 # Add a flag to indicate testing mode
 TESTING = 'test' in sys.argv

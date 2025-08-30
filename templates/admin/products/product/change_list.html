@@ -1,0 +1,138 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+.is-active-toggle {
+    cursor: pointer;
+    transform: scale(1.2);
+}
+
+.is-active-toggle:hover {
+    transform: scale(1.3);
+}
+
+.toggle-loading {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.success-message {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 10px 0;
+    display: none;
+}
+
+.error-message {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 10px 0;
+    display: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="toggle-messages"></div>
+{{ block.super }}
+{% endblock %}
+
+{% block extrajs %}
+{{ block.super }}
+<script>
+(function($) {
+    $(document).ready(function() {
+        // Handle is_active toggle clicks
+        $('.is-active-toggle').on('change', function(e) {
+            e.preventDefault();
+            
+            const checkbox = $(this);
+            const productId = checkbox.data('product-id');
+            const messagesContainer = $('#toggle-messages');
+            
+            // Add loading state
+            checkbox.addClass('toggle-loading');
+            
+            // Make AJAX request
+            $.ajax({
+                url: '{% url "admin:products_product_toggle_active" %}',
+                method: 'POST',
+                data: JSON.stringify({
+                    product_id: productId
+                }),
+                contentType: 'application/json',
+                success: function(response) {
+                    if (response.success) {
+                        // Update checkbox state
+                        checkbox.prop('checked', response.is_active);
+                        
+                        // Show success message
+                        showMessage(messagesContainer, response.message, 'success');
+                    } else {
+                        // Revert checkbox state
+                        checkbox.prop('checked', !checkbox.prop('checked'));
+                        
+                        // Show error message
+                        showMessage(messagesContainer, response.error || 'An error occurred', 'error');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    // Revert checkbox state
+                    checkbox.prop('checked', !checkbox.prop('checked'));
+                    
+                    // Show error message
+                    showMessage(messagesContainer, 'Network error: ' + error, 'error');
+                },
+                complete: function() {
+                    // Remove loading state
+                    checkbox.removeClass('toggle-loading');
+                }
+            });
+        });
+        
+        function showMessage(container, message, type) {
+            // Clear existing messages
+            container.empty();
+            
+            // Create and show new message
+            const messageDiv = $('<div class="' + type + '-message">' + message + '</div>');
+            container.append(messageDiv);
+            messageDiv.fadeIn();
+            
+            // Auto-hide after 3 seconds
+            setTimeout(function() {
+                messageDiv.fadeOut(function() {
+                    messageDiv.remove();
+                });
+            }, 3000);
+        }
+        
+        // Enhance bulk action feedback
+        $('form').on('submit', function(e) {
+            const action = $('select[name="action"]').val();
+            if (action === 'make_active') {
+                const selectedCount = $('input[name="_selected_action"]:checked').length;
+                if (selectedCount === 0) {
+                    e.preventDefault();
+                    showMessage($('#toggle-messages'), 'Please select at least one product to activate.', 'error');
+                    return false;
+                }
+                
+                if (!confirm(`Are you sure you want to activate ${selectedCount} product(s)?`)) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+        });
+    });
+})(django.jQuery);
+</script>
+{% endblock %}

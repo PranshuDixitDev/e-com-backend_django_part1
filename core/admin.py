@@ -36,8 +36,8 @@ from analytics.models import (
     CustomerLifetimeValue
 )
 
-from products.admin import ProductAdmin, BestSellerAdmin
-from products.models import Product, ProductImage, PriceWeight, BestSeller
+from products.admin import ProductAdmin, BestSellerAdmin, BulkUploadAdmin
+from products.models import Product, ProductImage, PriceWeight, BestSeller, BulkUpload
 from orders.admin import OrderAdmin
 User = get_user_model()
 
@@ -317,6 +317,7 @@ custom_admin_site.register(Product, ProductAdmin)
 custom_admin_site.register(ProductImage)
 custom_admin_site.register(PriceWeight)
 custom_admin_site.register(BestSeller, BestSellerAdmin)
+custom_admin_site.register(BulkUpload, BulkUploadAdmin)
 
 # Cart related models
 custom_admin_site.register(Cart)
